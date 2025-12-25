@@ -1,0 +1,85 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.dart_tool/
+.packages
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Build outputs
+dist/
+.next/
+out/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# Flutter/Dart
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+pubspec.lock
+
+# Android
+*.apk
+*.aab
+*.jks
+*.keystore
+local.properties
+android/.gradle/
+android/app/build/
+android/build/
+
+# Python
+*.egg
+*.whl
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Misc
+Thumbs.db
+.cache/
+tmp/
+temp/
+*.bak
+
+# Alembic versions (keep the folder, ignore contents during dev)
+# alembic/versions/
+
+# Keep these
+!.gitkeep

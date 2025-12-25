@@ -1,0 +1,7 @@
+certifi
+chardet
+idna
+pycryptodome
+requests
+urllib3
+six
