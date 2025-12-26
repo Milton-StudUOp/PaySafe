@@ -34,11 +34,11 @@ Este documento lista as melhorias seguras (aditivas) que não comprometem o func
 
 | # | Melhoria | Status | Data |
 |---|----------|--------|------|
-| 10 | Configuração de servidor remota | ⬜ Pendente | |
-| 11 | Splash screen com versão | ⬜ Pendente | |
-| 12 | Indicador de conexão online/offline | ⬜ Pendente | |
-| 13 | Vibração em ações | ⬜ Pendente | |
-| 14 | Som de confirmação | ⬜ Pendente | |
+| 10 | Configuração de servidor remota | ✅ Concluído | 2025-12-26 |
+| 11 | Splash screen com versão | ✅ Concluído | 2025-12-26 |
+| 12 | Indicador de conexão online/offline | ✅ Concluído | 2025-12-26 |
+| 13 | Vibração em ações | ✅ Concluído | 2025-12-26 |
+| 14 | Som de confirmação | ✅ Concluído | 2025-12-26 |
 
 ---
 
