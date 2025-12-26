@@ -101,13 +101,13 @@ async def create_merchant(
 
         # Check Duplicates
         if data.get("phone_number"):
-            existing_phone = await db.execute(select(MerchantModel).where(MerchantModel.phone_number == data["phone_number"]))
-            if existing_phone.scalar_one_or_none():
+            existing_phone = await db.execute(select(MerchantModel).where(MerchantModel.phone_number == data["phone_number"]).limit(1))
+            if existing_phone.scalars().first():
                  raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um comerciante com este número de telefone.")
 
         if data.get("nfc_uid"):
-            existing_nfc = await db.execute(select(MerchantModel).where(MerchantModel.nfc_uid == data["nfc_uid"]))
-            if existing_nfc.scalar_one_or_none():
+            existing_nfc = await db.execute(select(MerchantModel).where(MerchantModel.nfc_uid == data["nfc_uid"]).limit(1))
+            if existing_nfc.scalars().first():
                  raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um comerciante com este NFC UID.")
 
         if merchant.password:

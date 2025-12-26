@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/market_service.dart';
 import '../services/merchant_service.dart';
+import '../services/nfc_scan_service.dart';
 import '../utils/ui_utils.dart';
 
 class MerchantRegistrationScreen extends StatefulWidget {
@@ -47,7 +48,6 @@ class _MerchantRegistrationScreenState
   Map<String, dynamic>? _selectedMarket;
   String _merchantType = "FIXO"; // Default
   String _idType = "BI"; // Default
-  String? _errorMessage;
 
   @override
   void initState() {
@@ -60,16 +60,20 @@ class _MerchantRegistrationScreenState
       final markets = await _marketService.getApprovedMarkets();
       setState(() {
         _markets = markets;
-        if (markets.isEmpty) {
-          _errorMessage =
-              "Nenhum mercado disponível na sua jurisdição. Contacte o administrador para verificar a sua atribuição.";
+        if (markets.isEmpty && mounted) {
+          UIUtils.showErrorSnackBar(
+            context,
+            "Nenhum mercado disponível na sua jurisdição. Contacte o administrador.",
+          );
         }
       });
     } catch (e) {
-      setState(
-        () => _errorMessage =
-            "Erro ao carregar mercados: ${e.toString().replaceAll('Exception: ', '')}",
-      );
+      if (mounted) {
+        UIUtils.showErrorSnackBar(
+          context,
+          "Erro ao carregar mercados: ${e.toString().replaceAll('Exception: ', '')}",
+        );
+      }
     }
   }
 
@@ -91,7 +95,6 @@ class _MerchantRegistrationScreenState
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
@@ -151,9 +154,12 @@ class _MerchantRegistrationScreenState
         );
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll("Exception: ", "");
-      });
+      if (mounted) {
+        UIUtils.showErrorSnackBar(
+          context,
+          e.toString().replaceAll("Exception: ", ""),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -223,17 +229,6 @@ class _MerchantRegistrationScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_errorMessage != null)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        color: Colors.red.shade50,
-                        child: Text(
-                          _errorMessage!,
-                          style: GoogleFonts.inter(color: Colors.red),
-                        ),
-                      ),
-
                     _buildSectionHeader("Dados Gerais"),
                     _buildTextField(
                       "Nome Completo *",
@@ -323,10 +318,48 @@ class _MerchantRegistrationScreenState
                         obscureText: true,
                       ),
                       const SizedBox(height: 16),
-                      _buildTextField(
-                        "NFC UID *",
-                        _nfcController,
-                        icon: LucideIcons.creditCard,
+                      // NFC UID Field with Scan Button
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _buildTextField(
+                              "NFC UID *",
+                              _nfcController,
+                              icon: LucideIcons.creditCard,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 56,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final uid = await NfcScanService.scanNfcUid(
+                                  context,
+                                );
+                                if (uid != null) {
+                                  setState(() {
+                                    _nfcController.text = uid;
+                                  });
+                                }
+                              },
+                              icon: const Icon(LucideIcons.nfc, size: 20),
+                              label: const Text("Ler"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF10B981),
+                                side: const BorderSide(
+                                  color: Color(0xFF10B981),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 

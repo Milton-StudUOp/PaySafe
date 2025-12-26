@@ -74,7 +74,7 @@ async def create_agent(
             generated_code = "AG" + province_prefix + "".join([str(random.randint(0, 9)) for _ in range(6)])
             # Check if code already exists
             existing = await db.execute(select(AgentModel).where(AgentModel.agent_code == generated_code))
-            if not existing.scalar_one_or_none():
+            if not existing.scalars().first():
                 break
         
         data = agent.model_dump(exclude={"pin", "requester_notes"})

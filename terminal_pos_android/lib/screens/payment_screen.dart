@@ -258,17 +258,51 @@ class _PaymentScreenState extends State<PaymentScreen> {
       receiptData['agent'] = agentData; // Logged-in agent
 
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => ReceiptScreen(transactionData: receiptData),
-          ),
-        );
+        setState(() => _isLoading = false);
+
+        // Check backend status field to determine success/failure
+        final txStatus = response['status']?.toString().toUpperCase() ?? '';
+        final isSuccess = txStatus == 'SUCESSO';
+
+        if (isSuccess) {
+          // Success: Show dialog THEN navigate to receipt
+          UIUtils.showSuccessDialog(
+            context,
+            title: "Pagamento Realizado!",
+            message: "O pagamento foi processado com sucesso.",
+            onDismiss: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => ReceiptScreen(transactionData: receiptData),
+                ),
+              );
+            },
+          );
+        } else {
+          // Backend returned failure status (FALHOU, PENDENTE, etc.)
+          final errorMsg =
+              response['error_message'] ??
+              response['response_payload']?['error'] ??
+              "O pagamento não foi concluído. Status: $txStatus";
+          UIUtils.showErrorDialog(
+            context,
+            title: "Falha no Pagamento",
+            message: errorMsg.toString(),
+            onExit: () => Navigator.pop(context),
+          );
+        }
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
+      // Network/exception error: Show dialog and stay on page for retry
+      if (mounted) {
+        UIUtils.showErrorDialog(
+          context,
+          title: "Erro no Pagamento",
+          message: e.toString().replaceAll('Exception: ', ''),
+          onExit: () => Navigator.pop(context),
+        );
+      }
     }
   }
 

@@ -84,10 +84,12 @@ class UIUtils {
   }
 
   /// Shows a clean, centered error dialog
+  /// If [onExit] is provided, shows a secondary "Sair" button.
   static Future<void> showErrorDialog(
     BuildContext context, {
     required String title,
     required String message,
+    VoidCallback? onExit,
   }) {
     return showDialog(
       context: context,
@@ -127,21 +129,67 @@ class UIUtils {
                 style: GoogleFonts.inter(color: slate500),
               ),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey.shade100,
-                    foregroundColor: slate900,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              if (onExit != null) ...[
+                // Two buttons: Retry (Fechar) and Exit (Sair)
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            onExit();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: slate500,
+                            side: BorderSide(color: Colors.grey.shade300),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text("Sair"),
+                        ),
+                      ),
                     ),
-                  ),
-                  child: const Text("Fechar"),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: emerald500,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text("Tentar"),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+              ] else ...[
+                // Single close button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.grey.shade100,
+                      foregroundColor: slate900,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text("Fechar"),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

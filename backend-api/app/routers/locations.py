@@ -46,7 +46,7 @@ async def create_province(data: ProvinceCreate, db: AsyncSession = Depends(get_d
             (ProvinceModel.name == data.name) | (ProvinceModel.code == data.code)
         )
     )
-    if existing.scalar_one_or_none():
+    if existing.scalars().first():
         raise HTTPException(status_code=400, detail="Província com este nome ou código já existe")
     
     province = ProvinceModel(**data.model_dump())

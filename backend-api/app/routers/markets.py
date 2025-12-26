@@ -128,7 +128,7 @@ async def create_market(
             )
         )
     )
-    if existing.scalar_one_or_none():
+    if existing.scalars().first():
          raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Já existe um mercado '{market.name}' nesta província ({market.province})."
@@ -169,7 +169,7 @@ async def create_market(
                 )
             )
         )
-        if existing.scalar_one_or_none():
+        if existing.scalars().first():
              raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Já existe um mercado '{market.name}' na sua jurisdição atual ({market_data['province']})."
@@ -404,7 +404,7 @@ async def update_market(
             )
         )
     )
-    if existing.scalar_one_or_none():
+    if existing.scalars().first():
          await db.rollback() # Rollback implicit changes to session object
          raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
