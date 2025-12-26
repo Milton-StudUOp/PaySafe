@@ -44,7 +44,7 @@
 
 Os mercados municipais de Moçambique enfrentam desafios significativos na cobrança de taxas e gestão financeira:
 
-- **Perda de receita** estimada em 30-40% devido a cobranças informais
+- **Perda de receita** devido a cobranças informais e não rastreadas
 - **Falta de transparência** nos processos de arrecadação
 - **Dificuldade de rastreabilidade** de transações e comerciantes
 - **Ausência de dados** para tomada de decisão estratégica
@@ -60,12 +60,12 @@ O **PaySafe** é uma plataforma integrada de gestão de pagamentos que digitaliz
 
 ### Resultados Esperados
 
-| Métrica | Antes | Depois | Melhoria |
-|---------|-------|--------|----------|
-| Taxa de cobrança | 60% | 95% | +35% |
-| Tempo de reconciliação | 5 dias | Tempo real | -100% |
-| Receita arrecadada | Base | +40% | +40% |
-| Fraude e desvios | Alta | Mínima | -90% |
+| Métrica | Impacto Estimado |
+|---------|------------------|
+| Taxa de cobrança | Aumento significativo |
+| Tempo de reconciliação | Redução para tempo real |
+| Receita arrecadada | Aumento substancial |
+| Fraude e desvios | Redução drástica |
 
 ---
 
@@ -95,7 +95,7 @@ O **PaySafe** é uma plataforma integrada de gestão de pagamentos que digitaliz
 
 ### 3.1 Contexto
 
-Moçambique possui mais de **100 mercados municipais** em operação, servindo milhões de transações diárias. A maioria opera com sistemas manuais ou semi-manuais que resultam em:
+Moçambique possui **11 províncias** com **157 distritos/municípios** em operação, servindo milhares de transações diárias. A maioria opera com sistemas manuais ou semi-manuais que resultam em:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -116,12 +116,12 @@ Moçambique possui mais de **100 mercados municipais** em operação, servindo m
 
 ### 3.2 Impacto Financeiro
 
-| Categoria | Estimativa Anual |
-|-----------|------------------|
-| Receita potencial não cobrada | 150M - 250M MZN |
-| Custos de reconciliação manual | 20M - 30M MZN |
-| Perdas por fraude/desvio | 50M - 80M MZN |
-| **Total de ineficiência** | **220M - 360M MZN** |
+| Categoria | Estimativa |
+|-----------|------------|
+| Receita potencial não cobrada | Elevada |
+| Custos de reconciliação manual | Significativos |
+| Perdas por fraude/desvio | Consideráveis |
+| **Total de ineficiência** | **Substancial** |
 
 ### 3.3 Stakeholders Afetados
 
@@ -149,8 +149,8 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 │  │             │    │             │    │                     │  │
 │  │ • Cobrança  │    │ • Dashboard │    │ • M-Pesa            │  │
 │  │ • Recibos   │←──→│ • Gestão    │←──→│ • e-Mola            │  │
-│  │ • Offline   │    │ • Relatórios│    │ • Bancos            │  │
-│  │ • NFC       │    │ • Auditoria │    │ • SMS Gateway       │  │
+│  │ • NFC       │    │ • Relatórios│    │                     │  │
+│  │             │    │ • Auditoria │    │                     │  │
 │  └─────────────┘    └─────────────┘    └─────────────────────┘  │
 │         │                  │                      │              │
 │         └──────────────────┼──────────────────────┘              │
@@ -170,7 +170,7 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **Terminal POS** | App Android para agentes de campo | Android/Kotlin |
 | **Portal Web** | Dashboard administrativo | Next.js/React |
 | **API Backend** | Serviços e lógica de negócio | Python/FastAPI |
-| **Base de Dados** | Armazenamento seguro | PostgreSQL |
+| **Base de Dados** | Armazenamento seguro | MySQL |
 | **Integrações** | Pagamentos móveis | M-Pesa, e-Mola |
 
 ### 4.3 Fluxo de Operação
@@ -185,7 +185,7 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
       │                             │                             │
       ▼                             ▼                             ▼
    Cartão NFC              Recibo digital            Relatórios automáticos
-   emitido                 + SMS enviado             + Auditoria completa
+   emitido                                           + Auditoria completa
 ```
 
 ---
@@ -198,7 +198,6 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 |----------------|-----------|-----------|
 | **Cobrança Digital** | Registo de pagamentos com valor e método | Rastreabilidade total |
 | **Recibos Digitais** | Geração automática com QR code | Prova de pagamento |
-| **Modo Offline** | Funcionamento sem internet | Cobertura rural |
 | **Identificação NFC** | Leitura de cartões de comerciante | Rapidez e precisão |
 | **Múltiplos Métodos** | Dinheiro, M-Pesa, e-Mola | Conveniência |
 | **Sincronização** | Push automático quando online | Dados actualizados |
@@ -265,9 +264,9 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 │   ─────────                 ───────                 ─────    │
 │                                                              │
 │   ┌─────────┐              ┌─────────┐           ┌───────┐  │
-│   │ Next.js │              │ FastAPI │           │Postgres│  │
-│   │ React   │◄────────────►│ Python  │◄─────────►│  SQL   │  │
-│   │ Tailwind│   REST API   │ Uvicorn │           │        │  │
+│   │ Next.js │              │ FastAPI │           │ MySQL │  │
+│   │ React   │◄────────────►│ Python  │◄─────────►│  SQL  │  │
+│   │ Tailwind│   REST API   │ Uvicorn │           │       │  │
 │   └─────────┘              └─────────┘           └───────┘  │
 │        │                        │                            │
 │   ┌─────────┐              ┌─────────┐                      │
@@ -286,7 +285,7 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **Web Frontend** | Next.js + React | 16.x / 19.x |
 | **Mobile App** | Android Kotlin | API 26+ |
 | **Backend API** | Python FastAPI | 3.11+ |
-| **Base de Dados** | PostgreSQL | 15+ |
+| **Base de Dados** | MySQL | 8.0+ |
 | **Cache/Queue** | Redis + Celery | 7.x |
 | **Auth** | JWT + OAuth2 | - |
 | **Hosting** | Cloud (AWS/Azure) | - |
@@ -304,52 +303,78 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 
 ## 7. Modelo de Negócio
 
-### 7.1 Estrutura de Preços
+### 7.1 Plano Enterprise (Único)
 
-| Componente | Modelo | Preço Indicativo |
-|------------|--------|------------------|
-| **Licença Software** | Anual por município | $5,000 - $15,000/ano |
-| **Terminal POS** | Compra ou aluguer | $150 - $250/unidade |
-| **Implementação** | One-time setup | $3,000 - $10,000 |
-| **Suporte & Manutenção** | Anual (15-20% da licença) | Variável |
-| **Customizações** | Por demanda | Sob orçamento |
-
-### 7.2 Opções de Licenciamento
+O PaySafe oferece um **plano único Enterprise** por município, com acesso ilimitado a todas as funcionalidades:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    PLANOS DISPONÍVEIS                        │
+│                    PLANO ENTERPRISE                          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│   STARTER            PROFESSIONAL          ENTERPRISE        │
-│   ────────           ────────────          ──────────        │
+│   ✅ Mercados Ilimitados                                    │
+│   ✅ Comerciantes Ilimitados                                │
+│   ✅ Dispositivos POS Ilimitados                            │
+│   ✅ Utilizadores Ilimitados                                │
+│   ✅ Relatórios Avançados                                   │
+│   ✅ Auditoria Completa                                     │
+│   ✅ Suporte Dedicado                                       │
+│   ✅ Actualizações Incluídas                                │
 │                                                              │
-│   1-5 Mercados       5-20 Mercados        Ilimitado          │
-│   50 Comerciantes    500 Comerciantes     Ilimitado          │
-│   5 POS              25 POS               Ilimitado          │
-│   Relatórios Básicos Relatórios Avançados Relatórios Custom  │
-│   Email Support      Priority Support     Dedicated Support  │
+│   ─────────────────────────────────────────────────────     │
 │                                                              │
-│   $5,000/ano         $12,000/ano          Sob Consulta       │
+│   💰 PREÇO: Sob consulta (MZN/mês por município)           │
+│                                                              │
+│   O preço é definido com base nas necessidades              │
+│   específicas de cada município.                             │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 7.3 Modelo de Receita
+### 7.2 Estrutura de Preços
 
-| Fonte de Receita | % do Total | Recorrência |
-|------------------|------------|-------------|
-| Licenças de software | 60% | Anual |
-| Hardware (POS) | 15% | One-time |
-| Implementação | 10% | One-time |
-| Suporte & Manutenção | 10% | Anual |
-| Customizações | 5% | Por demanda |
+| Componente | Modelo | Valor (MZN) |
+|------------|--------|-------------|
+| **Licença Software** | Mensal por município | Sob consulta |
+| **Terminal POS** | Compra ou aluguer | A definir |
+| **Implementação** | Setup inicial | A definir |
+| **Suporte & Manutenção** | Incluído na licença | Incluído |
+| **Customizações** | Por demanda | Sob orçamento |
+
+### 7.3 O Que Está Incluído
+
+- ✅ Acesso completo ao Portal Web
+- ✅ API para integrações
+- ✅ App Terminal POS
+- ✅ Suporte técnico
+- ✅ Actualizações de software
+- ✅ Formação inicial
+- ✅ Documentação completa
 
 ---
 
 ## 8. Mercado Alvo
 
-### 8.1 Segmentação
+### 8.1 Cobertura Geográfica
+
+O sistema está preparado para operar em todo o território de Moçambique:
+
+| Província | Código | Nº de Distritos |
+|-----------|--------|-----------------|
+| Cabo Delgado | CAB | 17 |
+| Gaza | GAZ | 12 |
+| Inhambane | INH | 14 |
+| Manica | MAN | 12 |
+| Maputo Cidade | MPC | 7 |
+| Maputo Província | MPP | 8 |
+| Nampula | NAM | 23 |
+| Niassa | NIA | 16 |
+| Sofala | SOF | 13 |
+| Tete | TET | 14 |
+| Zambézia | ZAM | 21 |
+| **Total** | **11 Províncias** | **157 Distritos** |
+
+### 8.2 Segmentação
 
 | Segmento | Descrição | Potencial |
 |----------|-----------|-----------|
@@ -358,43 +383,14 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **Ministério** | Coordenação nacional | Alto |
 | **Concessionários** | Operadores privados de mercados | Médio |
 
-### 8.2 Mercado Total Endereçável (TAM)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    MERCADO MOÇAMBIQUE                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   TAM (Total Available Market)                               │
-│   ─────────────────────────────                              │
-│   154 Municípios × $10,000 média = $1.54M/ano               │
-│   + Hardware: 1,500 POS × $200 = $300K                      │
-│   + Implementação: 154 × $5,000 = $770K                     │
-│   ────────────────────────────────────                       │
-│   Total TAM: ~$2.6M/ano                                     │
-│                                                              │
-│   SAM (Serviceable Available Market)                         │
-│   ──────────────────────────────────                         │
-│   50 Municípios prioritários (Ano 1-3)                      │
-│   = ~$850K/ano                                              │
-│                                                              │
-│   SOM (Serviceable Obtainable Market)                        │
-│   ─────────────────────────────────────                      │
-│   10 Municípios (Ano 1) = ~$170K                            │
-│   25 Municípios (Ano 2) = ~$425K                            │
-│   50 Municípios (Ano 3) = ~$850K                            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 8.3 Expansão Regional
+### 8.3 Fases de Expansão
 
 | Fase | Geografia | Timeline |
 |------|-----------|----------|
-| **Fase 1** | Moçambique (Maputo, Nampula, Beira) | 2025 |
-| **Fase 2** | Moçambique Nacional | 2026 |
-| **Fase 3** | CPLP (Angola, Cabo Verde) | 2027 |
-| **Fase 4** | África Austral (SADC) | 2028+ |
+| **Fase 1** | Municípios prioritários | 2025 |
+| **Fase 2** | Expansão regional | 2026 |
+| **Fase 3** | Cobertura nacional | 2027 |
+| **Fase 4** | Regional (CPLP/SADC) | 2028+ |
 
 ---
 
@@ -422,17 +418,17 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 │   ✅ REALIDADE LOCAL                                        │
 │      Adaptado às infra-estruturas e práticas de Moçambique  │
 │                                                              │
-│   ✅ MODO OFFLINE                                           │
-│      Funciona sem conectividade constante                    │
-│                                                              │
 │   ✅ INTEGRAÇÃO MÓVEL                                       │
 │      M-Pesa e e-Mola nativos                                │
 │                                                              │
 │   ✅ PREÇO ACESSÍVEL                                        │
-│      Custo adaptado a orçamentos municipais                  │
+│      Custo adaptado a orçamentos municipais (MZN)           │
 │                                                              │
 │   ✅ SUPORTE LOCAL                                          │
 │      Equipa em Moçambique, português nativo                  │
+│                                                              │
+│   ✅ TECNOLOGIA MODERNA                                     │
+│      Stack actualizado e escalável                           │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -443,38 +439,35 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 
 ### 10.1 Benefícios Quantificáveis
 
-| Benefício | Métrica | Impacto Estimado |
-|-----------|---------|------------------|
-| **Aumento de Receita** | Taxa de cobrança | +35-50% |
-| **Redução de Fraude** | Desvios detectados | -80-90% |
-| **Eficiência Operacional** | Tempo de reconciliação | -95% |
-| **Custo Administrativo** | Horas de trabalho manual | -60% |
+| Benefício | Impacto Estimado |
+|-----------|------------------|
+| **Aumento de Receita** | Significativo |
+| **Redução de Fraude** | Drástica |
+| **Eficiência Operacional** | Elevada |
+| **Custo Administrativo** | Redução substancial |
 
-### 10.2 Cálculo de ROI (Exemplo)
+### 10.2 Cálculo de ROI (Exemplo Ilustrativo)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │              ANÁLISE DE ROI - MUNICÍPIO MODELO               │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│   INVESTIMENTO INICIAL                                       │
+│   INVESTIMENTO                                               │
+│   ────────────                                               │
+│   Licença mensal + Hardware + Implementação                 │
+│                                                              │
+│   BENEFÍCIOS ESPERADOS                                       │
 │   ────────────────────                                       │
-│   Licença anual:              $10,000                       │
-│   20 Terminais POS:            $4,000                       │
-│   Implementação:               $5,000                       │
-│   ────────────────────────────────────                       │
-│   Total Ano 1:                $19,000                       │
+│   • Aumento na taxa de cobrança                             │
+│   • Redução de fraude e desvios                             │
+│   • Eficiência operacional                                  │
+│   • Dados para tomada de decisão                            │
 │                                                              │
-│   BENEFÍCIOS ANUAIS                                          │
-│   ─────────────────                                          │
-│   Receita adicional (+40%):   $50,000                       │
-│   Redução fraude:             $15,000                       │
-│   Eficiência operacional:      $8,000                       │
-│   ────────────────────────────────────                       │
-│   Total Benefício:            $73,000                       │
-│                                                              │
-│   ROI = (73,000 - 19,000) / 19,000 = 284%                   │
-│   Payback: ~3.1 meses                                       │
+│   RETORNO                                                    │
+│   ───────                                                    │
+│   Payback estimado: Primeiros meses de operação             │
+│   ROI: Positivo no primeiro ano                             │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -496,8 +489,7 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | Área | Conformidade |
 |------|--------------|
 | **Protecção de Dados** | Lei de Protecção de Dados Pessoais (Moçambique) |
-| **Segurança** | OWASP Top 10, ISO 27001 (em curso) |
-| **Financeiro** | Regulamentos do Banco de Moçambique |
+| **Segurança** | OWASP Top 10, Boas práticas de segurança |
 | **Pagamentos Móveis** | Requisitos M-Pesa/e-Mola |
 
 ### 11.2 Medidas de Segurança
@@ -552,13 +544,13 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 │   ✅ Portal Web          ⬜ Multi-município    ⬜ BI Avançado│
 │   ✅ Terminal POS        ⬜ App Comerciante    ⬜ API Pública│
 │   ✅ API Backend         ⬜ Pagamentos Auto    ⬜ White-label │
-│   ✅ Relatórios          ⬜ SMS Notificações   ⬜ Marketplace │
+│   ✅ Relatórios          ⬜ Notificações       ⬜ Marketplace │
 │   ✅ Auditoria           ⬜ Indoor Maps        ⬜ AI/ML       │
 │                                                              │
 │   2027+                                                      │
 │   ─────                                                      │
 │   ⬜ Expansão CPLP                                          │
-│   ⬜ Blockchain Receipts                                    │
+│   ⬜ Novas integrações                                      │
 │   ⬜ IoT Integration                                        │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
@@ -572,7 +564,6 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **Pagamentos Automáticos** | Débitos recorrentes | Alta |
 | **BI Avançado** | Power BI / Tableau integration | Média |
 | **API Pública** | Integrações de terceiros | Média |
-| **Blockchain** | Recibos imutáveis | Baixa |
 
 ---
 
@@ -618,11 +609,9 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **SaaS** | Software as a Service |
 | **ROI** | Return on Investment |
 | **RBAC** | Role-Based Access Control |
+| **MZN** | Metical Moçambicano |
 
 ### B. Perguntas Frequentes (FAQ)
-
-**Q: O sistema funciona sem internet?**
-> Sim, o Terminal POS tem modo offline. As transações são sincronizadas quando a conectividade é restaurada.
 
 **Q: Quanto tempo demora a implementação?**
 > Tipicamente 4-8 semanas, dependendo do tamanho do município e número de mercados.
@@ -632,6 +621,12 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 
 **Q: Posso integrar com sistemas existentes?**
 > Sim, oferecemos API REST para integrações com ERPs e outros sistemas.
+
+**Q: Quais métodos de pagamento são suportados?**
+> Dinheiro (cash), M-Pesa e e-Mola.
+
+**Q: O sistema funciona em todo o país?**
+> Sim, o sistema suporta as 11 províncias e 157 distritos de Moçambique.
 
 ---
 
