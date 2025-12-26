@@ -254,6 +254,7 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
                   onPressed: _performSearch,
                   style: IconButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ],

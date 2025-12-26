@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![PaySafe](../frontend-next/public/PAYSAFE_SquaredNoBG.png)
+![PaySafe](../frontend-next/public/PAYSAFE_Squared.png)
 
 **Aplicação Flutter para Terminais POS em Mercados Municipais**
 

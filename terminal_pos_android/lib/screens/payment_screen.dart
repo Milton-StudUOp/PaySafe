@@ -1219,6 +1219,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               onPressed: _isLoading ? null : _processPayment,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

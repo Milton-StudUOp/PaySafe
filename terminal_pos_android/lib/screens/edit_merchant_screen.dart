@@ -301,6 +301,7 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
                 onPressed: _isLoading ? null : _handleSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
                 ),
                 child: _isLoading
