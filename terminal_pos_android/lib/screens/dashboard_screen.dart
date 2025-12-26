@@ -318,21 +318,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     .animate()
                     .fadeIn(delay: 500.ms)
                     .scale(begin: const Offset(0.8, 0.8)),
-                _ActionCard(
-                      icon: LucideIcons.keyRound,
-                      title: 'Alterar PIN',
-                      subtitle: 'Redefinir senha',
-                      color: const Color(0xFFF59E0B),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PinResetScreen(),
-                        ),
-                      ),
-                    )
-                    .animate()
-                    .fadeIn(delay: 600.ms)
-                    .scale(begin: const Offset(0.8, 0.8)),
+                
                 _ActionCard(
                       icon: LucideIcons.search,
                       title: 'Buscar',
@@ -347,6 +333,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     )
                     .animate()
                     .fadeIn(delay: 700.ms)
+                    .scale(begin: const Offset(0.8, 0.8)),
+
+                _ActionCard(
+                      icon: LucideIcons.keyRound,
+                      title: 'Alterar PIN',
+                      subtitle: 'Redefinir senha',
+                      color: const Color(0xFFF59E0B),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PinResetScreen(),
+                        ),
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 600.ms)
                     .scale(begin: const Offset(0.8, 0.8)),
               ],
             ),
