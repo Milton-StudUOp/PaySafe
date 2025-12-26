@@ -8,8 +8,9 @@ import type {
     ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+// Configuration
+const TOAST_LIMIT = 3  // Show up to 3 toasts at once
+const TOAST_REMOVE_DELAY = 5000  // Auto-dismiss after 5 seconds
 
 type ToasterToast = ToastProps & {
     id: string
@@ -171,6 +172,46 @@ function toast({ ...props }: Toast) {
     }
 }
 
+// ============================================
+// Helper functions for common toast types
+// ============================================
+
+/** Show a success toast with green styling */
+toast.success = (title: string, description?: string) => {
+    return toast({
+        title,
+        description,
+        variant: "success" as ToastProps["variant"],
+    })
+}
+
+/** Show an error toast with red styling */
+toast.error = (title: string, description?: string) => {
+    return toast({
+        title,
+        description,
+        variant: "destructive" as ToastProps["variant"],
+    })
+}
+
+/** Show a warning toast with amber styling */
+toast.warning = (title: string, description?: string) => {
+    return toast({
+        title,
+        description,
+        variant: "warning" as ToastProps["variant"],
+    })
+}
+
+/** Show an info toast with blue styling */
+toast.info = (title: string, description?: string) => {
+    return toast({
+        title,
+        description,
+        variant: "info" as ToastProps["variant"],
+    })
+}
+
 function useToast() {
     const [state, setState] = React.useState<State>(memoryState)
 
@@ -192,3 +233,4 @@ function useToast() {
 }
 
 export { useToast, toast }
+

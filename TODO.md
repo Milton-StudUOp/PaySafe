@@ -26,7 +26,7 @@ Este documento lista as melhorias seguras (aditivas) que não comprometem o func
 | 6 | Loading skeletons nas tabelas | ✅ Concluído | 2024-05-16 |
 | 7 | Página de erro/manutenção | ✅ Concluído | 2025-12-26 |
 | 8 | Favicon e meta tags SEO | ✅ Concluído | 2025-12-26 |
-| 9 | Notificações toast melhoradas | ⬜ Pendente | |
+| 9 | Notificações toast melhoradas | ✅ Concluído | 2025-12-26 |
 
 ---
 
