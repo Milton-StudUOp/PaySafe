@@ -208,7 +208,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _processPayment() async {
     if (_selectedMethod != 'DINHEIRO' && !_validateCustomerNumber()) {
-      setState(() => _errorMessage = "Número inválido para $_selectedMethod");
+      String helpText = "";
+      if (_selectedMethod == 'MPESA') {
+        helpText = "O número deve começar com 84 ou 85 e ter 9 dígitos.";
+      } else if (_selectedMethod == 'EMOLA') {
+        helpText = "O número deve começar com 86 ou 87 e ter 9 dígitos.";
+      } else if (_selectedMethod == 'MKESH') {
+        helpText = "O número deve começar com 82 ou 83 e ter 9 dígitos.";
+      }
+      UIUtils.showErrorSnackBar(
+        context,
+        "Número inválido para $_selectedMethod. $helpText",
+      );
       return;
     }
 
@@ -1266,7 +1277,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return InkWell(
       onTap: () => setState(() {
         _selectedMethod = value;
-        // Clear previous inputs if switching logic required
+        // Reset customer number and error when switching methods
+        _customerNumberController.clear();
+        _errorMessage = null;
       }),
       child: Container(
         alignment: Alignment.center,
