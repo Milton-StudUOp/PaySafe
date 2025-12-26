@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import '../services/merchant_service.dart';
+import '../utils/ui_utils.dart';
 import 'payment_screen.dart';
 import 'edit_merchant_screen.dart'; // Will create this next
 
@@ -108,49 +109,121 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(LucideIcons.nfc, size: 48, color: Color(0xFF10B981)),
-            const SizedBox(height: 16),
-            Text(
-              "Aproxime o Cartão",
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-            ),
-          ],
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  LucideIcons.nfc,
+                  size: 40,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Aproxime o Cartão",
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Aproxime o cartão NFC na parte traseira do dispositivo",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    NfcManager.instance.stopSession();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey.shade600,
+                  ),
+                  child: const Text("Cancelar"),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ).then((_) => NfcManager.instance.stopSession());
   }
 
   void _onMerchantSelected(Map<String, dynamic> merchant) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => Padding(
+    UIUtils.showCustomBottomSheet(
+      context,
+      child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: merchant['merchant_type'] == 'FIXO'
+                  ? Colors.blue.shade50
+                  : Colors.amber.shade50,
+              child: Icon(
+                merchant['merchant_type'] == 'FIXO'
+                    ? LucideIcons.store
+                    : LucideIcons.footprints,
+                color: merchant['merchant_type'] == 'FIXO'
+                    ? Colors.blue
+                    : Colors.amber,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
               merchant['full_name'],
+              textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
+                fontSize: 20,
               ),
             ),
             const SizedBox(height: 8),
-            Text("NFC: ${merchant['nfc_uid'] ?? 'N/A'}"),
-            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.nfc, size: 14, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(
+                    "NFC: ${merchant['nfc_uid'] ?? 'N/A'}",
+                    style: GoogleFonts.inter(
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.pop(ctx);
+                      Navigator.pop(context); // Close sheet
                       _goToPayment(merchant);
                     },
                     icon: const Icon(LucideIcons.banknote),
@@ -158,6 +231,10 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
                       foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -165,15 +242,22 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      Navigator.pop(ctx);
+                      Navigator.pop(context);
                       _goToEdit(merchant);
                     },
                     icon: const Icon(LucideIcons.edit),
                     label: const Text("EDITAR"),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 16), // Safety spacing
           ],
         ),
       ),

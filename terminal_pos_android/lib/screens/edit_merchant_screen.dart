@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/market_service.dart';
 import '../services/merchant_service.dart';
+import '../utils/ui_utils.dart';
 
 class EditMerchantScreen extends StatefulWidget {
   final Map<String, dynamic> merchant;
@@ -102,10 +103,9 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
 
     // Notes are mandatory for edits
     if (_notesController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("A observação é obrigatória para auditar a mudança."),
-        ),
+      UIUtils.showErrorSnackBar(
+        context,
+        "A observação é obrigatória para auditar a mudança.",
       );
       return;
     }
@@ -153,22 +153,14 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
       await _merchantService.updateMerchant(widget.merchant['id'], data);
 
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Sucesso"),
-            content: const Text("Dados atualizados (ou solicitação enviada)."),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Dialog
-                  Navigator.pop(context); // Screen
-                  // Ideally refresh search screen, but it will refresh on next search
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          ),
+        UIUtils.showSuccessDialog(
+          context,
+          title: "Sucesso",
+          message: "Dados atualizados (ou solicitação enviada).",
+          onDismiss: () {
+            Navigator.pop(context); // Screen
+            // Ideally refresh search screen, but it will refresh on next search
+          },
         );
       }
     } catch (e) {
@@ -177,6 +169,39 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF10B981), // Emerald 500
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF0F172A), // Slate 900
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF10B981), // Button text color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      final formatted =
+          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      setState(() {
+        _idExpiryController.text = formatted;
+      });
     }
   }
 
@@ -270,6 +295,8 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
                 _buildTextField(
                   "Validade ID (AAAA-MM-DD)",
                   _idExpiryController,
+                  readOnly: true,
+                  onTap: () => _selectDate(context),
                 ),
               ],
 
@@ -323,9 +350,13 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
     String label,
     TextEditingController controller, {
     bool required = true,
+    bool readOnly = false,
+    VoidCallback? onTap,
   }) {
     return TextFormField(
       controller: controller,
+      readOnly: readOnly,
+      onTap: onTap,
       validator: required
           ? (v) => v == null || v.isEmpty ? "Campo obrigatório" : null
           : null,

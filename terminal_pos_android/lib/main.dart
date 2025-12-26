@@ -35,7 +35,11 @@ class MyApp extends StatelessWidget {
       ),
       // Named routes for navigation
       routes: {'/login': (context) => const LoginScreen()},
-      home: const InactivityDetector(child: SplashScreen()),
+      // Wrap the entire Navigator with InactivityDetector using builder
+      builder: (context, child) {
+        return InactivityDetector(child: child!);
+      },
+      home: const SplashScreen(),
     );
   }
 }

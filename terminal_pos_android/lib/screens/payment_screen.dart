@@ -9,6 +9,7 @@ import 'receipt_screen.dart';
 import '../services/transaction_service.dart';
 import '../services/merchant_service.dart';
 import '../services/market_service.dart';
+import '../utils/ui_utils.dart';
 
 class PaymentScreen extends StatefulWidget {
   final Map<String, dynamic>? preSelectedMerchant;
@@ -659,37 +660,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     if (!mounted) return;
 
-    showModalBottomSheet(
-      context: context,
+    UIUtils.showCustomBottomSheet(
+      context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
+      child: StatefulBuilder(
+        builder: (context, setModalState) => SizedBox(
+          // Changed to SizedBox to allow child to determine height
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              left: 24,
+              right: 24,
+              top: 24,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Handle bar
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                // Handle bar handled by UIUtils
+                const SizedBox(height: 8),
 
                 // Header
                 Row(
@@ -962,7 +951,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   );
 
                               // Close modal
-                              Navigator.of(modalContext).pop();
+                              Navigator.of(context).pop();
 
                               // Update parent state with real merchant data
                               setState(() {

@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../utils/constants.dart';
 import '../services/connectivity_service.dart';
 import '../services/feedback_service.dart';
+import '../utils/ui_utils.dart';
 
 /// Settings screen for configuring server URL and app preferences.
 class SettingsScreen extends StatefulWidget {
@@ -112,29 +113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _feedback.successFeedback();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                LucideIcons.checkCircle,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Configurações guardadas',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      UIUtils.showSuccessSnackBar(context, 'Configurações guardadas');
     }
   }
 
@@ -148,25 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(LucideIcons.refreshCw, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'URL restaurado para o padrão',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.blue,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      UIUtils.showInfoSnackBar(context, 'URL restaurado para o padrão');
     }
   }
 

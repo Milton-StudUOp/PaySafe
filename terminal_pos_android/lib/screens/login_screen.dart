@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../services/auth_service.dart';
 import '../services/device_service.dart';
 import '../services/inactivity_service.dart';
+import '../utils/ui_utils.dart';
 import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -81,12 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _copyDeviceUuid() async {
     await Clipboard.setData(ClipboardData(text: _deviceUuid));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('ID do dispositivo copiado: $_deviceUuid'),
-          backgroundColor: emerald600,
-          duration: const Duration(seconds: 2),
-        ),
+      UIUtils.showSuccessSnackBar(
+        context,
+        'ID do dispositivo copiado: $_deviceUuid',
       );
     }
   }

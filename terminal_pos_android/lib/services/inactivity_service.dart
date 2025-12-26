@@ -76,11 +76,12 @@ class InactivityDetector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Listener(
       behavior: HitTestBehavior.translucent,
-      onTap: () => InactivityService.resetTimer(context),
-      onPanDown: (_) => InactivityService.resetTimer(context),
-      onScaleStart: (_) => InactivityService.resetTimer(context),
+      onPointerDown: (_) => InactivityService.resetTimer(context),
+      onPointerMove: (_) => InactivityService.resetTimer(
+        context,
+      ), // Optional but good for scrolling
       child: child,
     );
   }

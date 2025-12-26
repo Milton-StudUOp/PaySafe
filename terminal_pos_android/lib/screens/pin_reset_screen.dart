@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../services/auth_service.dart';
 import '../services/agent_service.dart';
+import '../utils/ui_utils.dart';
 
 class PinResetScreen extends StatefulWidget {
   const PinResetScreen({super.key});
@@ -78,12 +79,7 @@ class _PinResetScreenState extends State<PinResetScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("PIN atualizado com sucesso!"),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
+        UIUtils.showSuccessSnackBar(context, "PIN atualizado com sucesso!");
         // Go back after short delay
         Future.delayed(const Duration(seconds: 2), () {
           Navigator.of(context).pop();

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/market_service.dart';
 import '../services/merchant_service.dart';
+import '../utils/ui_utils.dart';
 
 class MerchantRegistrationScreen extends StatefulWidget {
   const MerchantRegistrationScreen({super.key});
@@ -84,9 +85,7 @@ class _MerchantRegistrationScreenState
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedMarket == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Selecione um mercado")));
+      UIUtils.showErrorSnackBar(context, "Selecione um mercado");
       return;
     }
 
@@ -142,22 +141,13 @@ class _MerchantRegistrationScreenState
       await _merchantService.createMerchantFromData(data);
 
       if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text("Sucesso"),
-            content: const Text("Comerciante cadastrado com sucesso!"),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // Close Dialog
-                  Navigator.of(context).pop(); // Close Screen
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          ),
+        UIUtils.showSuccessDialog(
+          context,
+          title: "Sucesso",
+          message: "Comerciante cadastrado com sucesso!",
+          onDismiss: () {
+            Navigator.of(context).pop(); // Close Screen
+          },
         );
       }
     } catch (e) {
@@ -166,6 +156,39 @@ class _MerchantRegistrationScreenState
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF10B981), // Emerald 500
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF0F172A), // Slate 900
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF10B981), // Button text color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      final formatted =
+          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      setState(() {
+        _idExpiryController.text = formatted;
+      });
     }
   }
 
@@ -342,7 +365,8 @@ class _MerchantRegistrationScreenState
                         "Validade (AAAA-MM-DD) *",
                         _idExpiryController,
                         icon: LucideIcons.calendar,
-                        keyboardType: TextInputType.datetime,
+                        readOnly: true,
+                        onTap: () => _selectDate(context),
                       ),
                     ],
 
@@ -457,12 +481,16 @@ class _MerchantRegistrationScreenState
     bool required = true,
     TextInputType keyboardType = TextInputType.text,
     bool obscureText = false,
+    bool readOnly = false,
+    VoidCallback? onTap,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      readOnly: readOnly,
+      onTap: onTap,
       validator:
           validator ??
           (required
