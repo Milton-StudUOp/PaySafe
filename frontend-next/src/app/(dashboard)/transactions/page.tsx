@@ -24,6 +24,7 @@ import { useLocations } from "@/hooks/useLocations"
 import { useAuth } from "@/lib/auth"
 import { NewPaymentDialog } from "@/components/features/payments/NewPaymentDialog"
 import { useToast } from "@/components/ui/use-toast"
+import { useDocumentTitle } from "@/hooks/useDocumentTitle"
 
 interface TransactionStats {
     total_collected_today: number;
@@ -33,6 +34,8 @@ interface TransactionStats {
 }
 
 export default function TransactionsPage() {
+    useDocumentTitle("transactions")
+
     const router = useRouter()
     const { toast } = useToast()
     const [transactions, setTransactions] = useState<Transaction[]>([])

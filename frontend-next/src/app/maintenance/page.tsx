@@ -82,7 +82,7 @@ export default function MaintenancePage() {
                     </ul>
                 </div>
 
-                {/* Notify Me Button */}
+                {/* Notify Me Button 
                 <Button
                     size="lg"
                     className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-amber-500/25 transition-all duration-300"
@@ -93,7 +93,7 @@ export default function MaintenancePage() {
                 >
                     <Bell className="mr-2 h-5 w-5" />
                     Notificar-me quando estiver pronto
-                </Button>
+                </Button> */}
 
                 {/* Footer */}
                 <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800 w-full">

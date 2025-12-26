@@ -16,8 +16,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell
 } from "recharts"
+import { useDocumentTitle } from "@/hooks/useDocumentTitle"
 
 export default function DashboardPage() {
+    useDocumentTitle("dashboard")
+
     const { user } = useAuth()
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [revenueChart, setRevenueChart] = useState<ChartData[]>([])
