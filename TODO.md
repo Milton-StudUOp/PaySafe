@@ -46,8 +46,8 @@ Este documento lista as melhorias seguras (aditivas) que não comprometem o func
 
 | # | Melhoria | Status | Data |
 |---|----------|--------|------|
-| 15 | README completo | ⬜ Pendente | |
-| 16 | Diagrama de arquitetura | ⬜ Pendente | |
+| 15 | README completo | ✅ Concluído | 2025-12-26 |
+| 16 | Diagrama de arquitetura | ✅ Concluído | 2025-12-26 |
 
 ---
 
