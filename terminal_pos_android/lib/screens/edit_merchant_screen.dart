@@ -239,6 +239,8 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
                       title: const Text("Fixo"),
                       value: "FIXO",
                       groupValue: _merchantType,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
                       onChanged: (v) =>
                           setState(() => _merchantType = v.toString()),
                     ),
@@ -248,6 +250,8 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
                       title: const Text("Ambulante"),
                       value: "AMBULANTE",
                       groupValue: _merchantType,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
                       onChanged: (v) =>
                           setState(() => _merchantType = v.toString()),
                     ),
