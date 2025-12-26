@@ -4,7 +4,7 @@
 
 <div align="center">
 
-![PaySafe Logo](frontend-next/public/paysafe-icon-square.png)
+![PaySafe Logo](frontend-next/public/PAYSAFE_Squared.png)
 
 **Sistema Integrado de Gestão de Pagamentos para Mercados Municipais**
 
