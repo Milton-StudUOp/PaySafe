@@ -15,12 +15,15 @@ interface TableSkeletonProps {
 }
 
 // Shimmer animation component
-function ShimmerBar({ className }: { className?: string }) {
+function ShimmerBar({ className, style }: { className?: string; style?: React.CSSProperties }) {
     return (
-        <div className={cn(
-            "relative overflow-hidden rounded-md bg-slate-200",
-            className
-        )}>
+        <div
+            className={cn(
+                "relative overflow-hidden rounded-md bg-slate-200",
+                className
+            )}
+            style={style}
+        >
             <div
                 className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent"
             />

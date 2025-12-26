@@ -24,7 +24,7 @@ Este documento lista as melhorias seguras (aditivas) que não comprometem o func
 |---|----------|--------|------|
 | 5 | Botão "Exportar CSV" funcional | ✅ Concluído | 2025-12-25 |
 | 6 | Loading skeletons nas tabelas | ✅ Concluído | 2024-05-16 |
-| 7 | Página de erro/manutenção | ⬜ Pendente | |
+| 7 | Página de erro/manutenção | ✅ Concluído | 2025-12-26 |
 | 8 | Favicon e meta tags SEO | ⬜ Pendente | |
 | 9 | Notificações toast melhoradas | ⬜ Pendente | |
 
