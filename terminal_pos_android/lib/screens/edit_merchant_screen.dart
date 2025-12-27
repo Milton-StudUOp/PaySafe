@@ -60,6 +60,7 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
     // LAYER 1: INSTANT LOAD (From Navigation Args)
     // Populate immediately so user sees data without waiting
     Map<String, dynamic> m = widget.merchant;
+    debugPrint('🏷️ Layer 1: widget.merchant full_name = ${m['full_name']}');
     _populateControllers(m);
 
     // Initial setState to show form (even while loading fresh data)
@@ -67,16 +68,26 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
 
     // LAYER 2: LOCAL CACHE (Full data + Pending Offline Edits)
     final merchantId = m['id'];
-    if (merchantId != null && merchantId is int) {
+    debugPrint(
+      '🔍 EditMerchant Layer 2: merchantId = $merchantId (type: ${merchantId.runtimeType})',
+    );
+
+    if (merchantId != null) {
       try {
         // This gets the cached version MERGED with any offline queue updates
-        final cached = await _merchantCache.getMerchantWithPendingUpdates(
-          merchantId,
-        );
+        // Support both int and String IDs
+        final cached = merchantId is int
+            ? await _merchantCache.getMerchantWithPendingUpdates(merchantId)
+            : await _getMerchantFromCacheById(merchantId);
+
         if (cached != null) {
-          debugPrint('📥 Loaded full data from Local Cache (Clean/Dirty)');
+          debugPrint(
+            '📥 Layer 2: Loaded from cache - full_name: ${cached['full_name']}',
+          );
           m = cached;
           if (mounted) _populateControllers(m);
+        } else {
+          debugPrint('⚠️ Layer 2: Merchant not found in cache');
         }
       } catch (e) {
         debugPrint('⚠️ Cache load error: $e');
@@ -170,6 +181,16 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
       _selectedMarket = found;
     } catch (_) {
       // Market not found in list
+    }
+  }
+
+  /// Helper to get merchant from cache by any ID type (int or String)
+  Future<Map<String, dynamic>?> _getMerchantFromCacheById(dynamic id) async {
+    final all = await _merchantCache.getAllCachedMerchants();
+    try {
+      return all.firstWhere((m) => m['id'].toString() == id.toString());
+    } catch (_) {
+      return null;
     }
   }
 
