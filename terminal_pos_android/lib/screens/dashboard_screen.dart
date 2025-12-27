@@ -66,42 +66,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
 
     final wasOffline = _isNetworkDown;
-    final stateChanged =
-        (isConnected && wasOffline) || (!isConnected && !wasOffline);
 
-    if (!stateChanged) return; // No change, skip
+    // Only react to actual changes
+    if (isConnected == !wasOffline) return; // No real change
 
     if (isConnected && wasOffline) {
       // CAME ONLINE (was offline before)
       setState(() {
         _isNetworkDown = false;
-        _connectionBannerMessage = "Conexão restaurada. Reiniciando sessão...";
+        _connectionBannerMessage = "Conexão restaurada. Reautenticando...";
         _isReconnectionBanner = true;
         _showConnectionBanner = true;
+      });
+
+      // Sync data first, then logout for clean re-login
+      _syncMerchantsInBackground().then((_) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted)
+            _forceReloginWithMessage(
+              'Conexão restaurada. Por favor, faça login novamente.',
+            );
+        });
       });
     } else if (!isConnected && !wasOffline) {
       // WENT OFFLINE (was online before)
       setState(() {
         _isNetworkDown = true;
-        _connectionBannerMessage = "Conexão perdida. Reiniciando sessão...";
+        _connectionBannerMessage = "Conexão perdida. Reautenticando...";
         _isReconnectionBanner = false;
         _showConnectionBanner = true;
       });
+
+      // Logout after brief delay for clean offline re-login
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted)
+          _forceReloginWithMessage(
+            'Conexão perdida. Por favor, faça login no modo offline.',
+          );
+      });
     }
+  }
 
-    // FORCE LOGOUT after showing the message (clean state approach)
-    // Wait 3 seconds to let user see the message, then logout
-    Future.delayed(const Duration(seconds: 3), () async {
-      if (!mounted) return;
+  /// Force logout and show message on login screen
+  Future<void> _forceReloginWithMessage(String message) async {
+    await _authService.logout();
+    if (!mounted) return;
 
-      await _authService.logout();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
-      }
-    });
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => LoginScreen(initialMessage: message)),
+      (route) => false,
+    );
   }
 
   @override

@@ -10,7 +10,9 @@ import '../utils/ui_utils.dart';
 import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialMessage;
+
+  const LoginScreen({super.key, this.initialMessage});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -48,6 +50,19 @@ class _LoginScreenState extends State<LoginScreen> {
     // Stop inactivity monitoring when on login screen
     InactivityService.stopMonitoring();
     _loadDeviceUuid();
+
+    // Show initial message if provided (e.g., from forced re-login)
+    if (widget.initialMessage != null && widget.initialMessage!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.initialMessage!),
+            backgroundColor: amber500,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      });
+    }
     _checkLastAgent();
   }
 
