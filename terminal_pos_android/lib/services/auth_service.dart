@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 import 'offline_auth_service.dart';
 import 'connectivity_service.dart';
+import 'smart_http_client.dart';
 
 /// Service for authentication using the backend API.
 /// Uses /api/v1/auth/pos-login for POS device login with agent-device binding.
@@ -280,38 +281,46 @@ class AuthService {
   }
 
   /// Make authenticated HTTP request with token header.
-  Future<http.Response> authenticatedGet(String endpoint) async {
+  /// Uses SmartHttpClient for connectivity-aware requests.
+  /// Throws [OfflineException] if offline.
+  Future<http.Response> authenticatedGet(
+    String endpoint, {
+    bool checkConnectivity = true,
+  }) async {
     final token = await getToken();
     if (token == null) {
       throw Exception('Não autenticado');
     }
 
-    return http.get(
-      Uri.parse('${AppConstants.baseUrl}$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
+    // Use SmartHttpClient for connectivity-aware requests
+    final smartClient = SmartHttpClient();
+    return smartClient.get(
+      endpoint,
+      requireAuth: true,
+      checkConnectivity: checkConnectivity,
     );
   }
 
   /// Make authenticated POST request with token header.
+  /// Uses SmartHttpClient for connectivity-aware requests.
+  /// Throws [OfflineException] if offline.
   Future<http.Response> authenticatedPost(
     String endpoint,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    bool checkConnectivity = true,
+  }) async {
     final token = await getToken();
     if (token == null) {
       throw Exception('Não autenticado');
     }
 
-    return http.post(
-      Uri.parse('${AppConstants.baseUrl}$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode(body),
+    // Use SmartHttpClient for connectivity-aware requests
+    final smartClient = SmartHttpClient();
+    return smartClient.post(
+      endpoint,
+      body,
+      requireAuth: true,
+      checkConnectivity: checkConnectivity,
     );
   }
 }
