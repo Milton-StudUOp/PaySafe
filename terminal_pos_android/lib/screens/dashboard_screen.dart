@@ -36,6 +36,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Network state (dynamic, real-time)
   bool _isNetworkDown = false;
+  bool _initialStateEstablished =
+      false; // Skip first emission to prevent false changes
 
   // Unified offline state: True if user logged in offline OR network is down
   bool get _effectivelyOffline => _isLoginModeOffline || _isNetworkDown;
@@ -65,9 +67,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _handleConnectionChange(bool isConnected) {
     if (!mounted) return;
 
+    // First emission: establish initial state, don't react
+    if (!_initialStateEstablished) {
+      _initialStateEstablished = true;
+      _isNetworkDown = !isConnected;
+      debugPrint(
+        '🌐 Initial network state established: ${isConnected ? "ONLINE" : "OFFLINE"}',
+      );
+      return; // Don't trigger any action on first check
+    }
+
     final wasOffline = _isNetworkDown;
 
-    // Only react to actual changes
+    // Only react to actual changes (after first state is established)
     if (isConnected == !wasOffline) return; // No real change
 
     if (isConnected && wasOffline) {

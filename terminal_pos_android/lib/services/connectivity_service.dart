@@ -45,8 +45,8 @@ class ConnectivityService extends ChangeNotifier {
   DateTime? get lastCheck => _lastCheck;
 
   /// Start periodic connectivity checks.
-  /// Default interval is 5 seconds for near real-time updates.
-  void startMonitoring({Duration interval = const Duration(seconds: 5)}) {
+  /// Default interval is 3 seconds for near real-time updates.
+  void startMonitoring({Duration interval = const Duration(seconds: 3)}) {
     _checkTimer?.cancel();
     _checkTimer = Timer.periodic(interval, (_) => checkConnectivity());
     // Initial check
