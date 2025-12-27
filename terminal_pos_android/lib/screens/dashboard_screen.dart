@@ -66,40 +66,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
 
     final wasOffline = _isNetworkDown;
+    final stateChanged =
+        (isConnected && wasOffline) || (!isConnected && !wasOffline);
+
+    if (!stateChanged) return; // No change, skip
 
     if (isConnected && wasOffline) {
       // CAME ONLINE (was offline before)
       setState(() {
         _isNetworkDown = false;
-        _connectionBannerMessage = "Conexão restaurada. Sincronizando...";
+        _connectionBannerMessage = "Conexão restaurada. Reiniciando sessão...";
         _isReconnectionBanner = true;
         _showConnectionBanner = true;
       });
-
-      // Hide green reconnection banner after 4 seconds
-      Future.delayed(const Duration(seconds: 4), () {
-        if (mounted) setState(() => _showConnectionBanner = false);
-      });
-
-      // Refresh token if we were in offline session (prevents 401 errors)
-      _authService.refreshTokenOnReconnect().then((success) {
-        if (!success && mounted) {
-          // Token refresh failed, user may need to re-login
-          debugPrint('⚠️ Token refresh failed on reconnection');
-        }
-      });
-
-      // Auto-trigger sync
-      _syncMerchantsInBackground();
     } else if (!isConnected && !wasOffline) {
       // WENT OFFLINE (was online before)
       setState(() {
         _isNetworkDown = true;
-        _connectionBannerMessage = "Sem conexão com servidor";
+        _connectionBannerMessage = "Conexão perdida. Reiniciando sessão...";
         _isReconnectionBanner = false;
         _showConnectionBanner = true;
       });
     }
+
+    // FORCE LOGOUT after showing the message (clean state approach)
+    // Wait 3 seconds to let user see the message, then logout
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+
+      await _authService.logout();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    });
   }
 
   @override
