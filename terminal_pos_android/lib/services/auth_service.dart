@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 import 'offline_auth_service.dart';
 import 'connectivity_service.dart';
-import 'smart_http_client.dart';
 
 /// Service for authentication using the backend API.
 /// Uses /api/v1/auth/pos-login for POS device login with agent-device binding.
@@ -225,51 +224,6 @@ class AuthService {
     return prefs.getBool(_offlineModeKey) ?? false;
   }
 
-  /// Refresh token when connection is restored after offline session.
-  /// Uses cached credentials to get a new valid JWT token from the server.
-  /// Returns true if token was successfully refreshed.
-  Future<bool> refreshTokenOnReconnect() async {
-    try {
-      // Only refresh if we were in offline mode
-      final wasOffline = await isOfflineMode();
-      if (!wasOffline) return true; // Already online, token should be valid
-
-      // Check if we're actually online now
-      final isOnline = await _connectivity.checkConnectivity();
-      if (!isOnline) return false; // Still offline
-
-      // Get cached credentials
-      final prefs = await SharedPreferences.getInstance();
-      final agentCode = prefs.getString(_agentCodeKey);
-      if (agentCode == null) return false;
-
-      // Get cached PIN from offline auth service
-      final cachedPin = await _offlineAuth.getCachedPin(agentCode);
-      if (cachedPin == null) return false;
-
-      // Get device serial
-      final deviceData = await getDeviceData();
-      final deviceSerial = deviceData?['serial_number'] ?? '';
-
-      // Attempt online login to get fresh token
-      await posLogin(agentCode, cachedPin, deviceSerial);
-
-      // Success! Offline mode flag is cleared by posLogin
-      return true;
-    } catch (e) {
-      // Failed to refresh, user may need to re-login
-      return false;
-    }
-  }
-
-  /// Check if current token is valid (not an offline fake token).
-  Future<bool> hasValidOnlineToken() async {
-    final token = await getToken();
-    if (token == null) return false;
-    // Offline tokens start with 'offline_session_'
-    return !token.startsWith('offline_session_');
-  }
-
   /// Get cached credentials expiry time.
   Future<DateTime?> getOfflineCacheExpiry(String agentCode) async {
     return _offlineAuth.getCacheExpiryTime(agentCode);
@@ -281,46 +235,129 @@ class AuthService {
   }
 
   /// Make authenticated HTTP request with token header.
-  /// Uses SmartHttpClient for connectivity-aware requests.
-  /// Throws [OfflineException] if offline.
-  Future<http.Response> authenticatedGet(
-    String endpoint, {
-    bool checkConnectivity = true,
-  }) async {
+  Future<http.Response> authenticatedGet(String endpoint) async {
     final token = await getToken();
     if (token == null) {
       throw Exception('Não autenticado');
     }
 
-    // Use SmartHttpClient for connectivity-aware requests
-    final smartClient = SmartHttpClient();
-    return smartClient.get(
-      endpoint,
-      requireAuth: true,
-      checkConnectivity: checkConnectivity,
+    return http.get(
+      Uri.parse('${AppConstants.baseUrl}$endpoint'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
     );
   }
 
   /// Make authenticated POST request with token header.
-  /// Uses SmartHttpClient for connectivity-aware requests.
-  /// Throws [OfflineException] if offline.
   Future<http.Response> authenticatedPost(
     String endpoint,
-    Map<String, dynamic> body, {
-    bool checkConnectivity = true,
-  }) async {
+    Map<String, dynamic> body,
+  ) async {
     final token = await getToken();
     if (token == null) {
       throw Exception('Não autenticado');
     }
 
-    // Use SmartHttpClient for connectivity-aware requests
-    final smartClient = SmartHttpClient();
-    return smartClient.post(
-      endpoint,
-      body,
-      requireAuth: true,
-      checkConnectivity: checkConnectivity,
+    return http.post(
+      Uri.parse('${AppConstants.baseUrl}$endpoint'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
     );
   }
+
+  // ==================== SEAMLESS MODE TRANSITION ====================
+
+  /// Set offline mode explicitly.
+  Future<void> setOfflineMode(bool isOffline) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_offlineModeKey, isOffline);
+  }
+
+  /// Validate if current token is still valid with the server.
+  /// Returns true if valid, false if expired/invalid.
+  /// Returns null if check couldn't be performed (network issue).
+  Future<bool?> validateToken() async {
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+
+      // Try a simple authenticated request to validate token
+      final response = await http
+          .get(
+            Uri.parse('${AppConstants.baseUrl}/auth/me'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return true; // Token valid
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        return false; // Token expired/invalid
+      }
+      return null; // Other error, can't determine
+    } catch (_) {
+      return null; // Network error - can't validate
+    }
+  }
+
+  /// Handle transition from offline to online mode.
+  /// Validates token and returns result.
+  Future<ModeTransitionResult> handleOnlineTransition() async {
+    // Check if we even have a token
+    final token = await getToken();
+    if (token == null) {
+      return ModeTransitionResult(
+        success: false,
+        requiresReauth: true,
+        message: 'Sem credenciais. Por favor faça login.',
+      );
+    }
+
+    // Validate token with server
+    final isValid = await validateToken();
+
+    if (isValid == false) {
+      // Token definitely expired
+      return ModeTransitionResult(
+        success: false,
+        requiresReauth: true,
+        message: 'Sessão expirada. Por favor faça login novamente.',
+      );
+    }
+
+    if (isValid == null) {
+      // Couldn't validate (server issue), but we have a token
+      // Allow transition but warn - might fail during sync
+      return ModeTransitionResult(
+        success: true,
+        requiresReauth: false,
+        message: 'Não foi possível validar sessão. Tentando sincronizar...',
+      );
+    }
+
+    // Token is valid!
+    await setOfflineMode(false);
+    return ModeTransitionResult(success: true, requiresReauth: false);
+  }
+}
+
+/// Result of a mode transition attempt.
+class ModeTransitionResult {
+  final bool success;
+  final bool requiresReauth;
+  final String? message;
+
+  ModeTransitionResult({
+    required this.success,
+    this.requiresReauth = false,
+    this.message,
+  });
 }

@@ -83,43 +83,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isConnected == !wasOffline) return; // No real change
 
     if (isConnected && wasOffline) {
-      // CAME ONLINE (was offline before)
-      setState(() {
-        _isNetworkDown = false;
-        _connectionBannerMessage = "Conexão restaurada. Reautenticando...";
-        _isReconnectionBanner = true;
-        _showConnectionBanner = true;
-      });
-
-      // Sync data first, then logout for clean re-login
-      _syncMerchantsInBackground().then((_) {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted)
-            _forceReloginWithMessage(
-              'Conexão restaurada. Por favor, faça login novamente.',
-            );
-        });
-      });
+      // CAME ONLINE (was offline before) - SEAMLESS TRANSITION
+      debugPrint('🟢 Connection restored - initiating seamless transition');
+      _handleGoingOnline();
     } else if (!isConnected && !wasOffline) {
-      // WENT OFFLINE (was online before)
-      setState(() {
-        _isNetworkDown = true;
-        _connectionBannerMessage = "Conexão perdida. Reautenticando...";
-        _isReconnectionBanner = false;
-        _showConnectionBanner = true;
-      });
-
-      // Logout after brief delay for clean offline re-login
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted)
-          _forceReloginWithMessage(
-            'Conexão perdida. Por favor, faça login no modo offline.',
-          );
-      });
+      // WENT OFFLINE (was online before) - NO LOGOUT NEEDED
+      debugPrint('🔴 Connection lost - switching to offline mode');
+      _handleGoingOffline();
     }
   }
 
-  /// Force logout and show message on login screen
+  /// Handle transition to online mode - validate and sync
+  Future<void> _handleGoingOnline() async {
+    setState(() {
+      _isNetworkDown = false;
+      _connectionBannerMessage = "Verificando sessão...";
+      _isReconnectionBanner = true;
+      _showConnectionBanner = true;
+    });
+
+    // Step 1: Validate token
+    final result = await _authService.handleOnlineTransition();
+
+    if (result.requiresReauth) {
+      // Session expired - must re-login
+      debugPrint('⚠️ Token expired - redirecting to login');
+      if (mounted) {
+        _forceReloginWithMessage(
+          result.message ?? 'Sessão expirada. Por favor faça login novamente.',
+        );
+      }
+      return;
+    }
+
+    // Step 2: Token valid (or couldn't validate) - proceed with sync
+    if (result.message != null && mounted) {
+      setState(() {
+        _connectionBannerMessage = result.message!;
+      });
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    // Step 3: Perform full sync
+    await _syncMerchantsInBackground();
+
+    // Step 4: Hide banner after sync
+    if (mounted) {
+      setState(() {
+        _connectionBannerMessage = "Sincronização completa!";
+      });
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() => _showConnectionBanner = false);
+      }
+    }
+  }
+
+  /// Handle transition to offline mode - just update UI
+  Future<void> _handleGoingOffline() async {
+    await _authService.setOfflineMode(true);
+
+    setState(() {
+      _isNetworkDown = true;
+      _connectionBannerMessage = "Modo offline ativado";
+      _isReconnectionBanner = false;
+      _showConnectionBanner = true;
+    });
+
+    // Hide banner after showing message
+    await Future.delayed(const Duration(seconds: 3));
+    if (mounted) {
+      setState(() => _showConnectionBanner = false);
+    }
+  }
+
+  /// Force logout and show message on login screen (only for expired sessions)
   Future<void> _forceReloginWithMessage(String message) async {
     await _authService.logout();
     if (!mounted) return;
