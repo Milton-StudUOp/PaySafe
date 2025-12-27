@@ -81,6 +81,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) setState(() => _showConnectionBanner = false);
       });
 
+      // Refresh token if we were in offline session (prevents 401 errors)
+      _authService.refreshTokenOnReconnect().then((success) {
+        if (!success && mounted) {
+          // Token refresh failed, user may need to re-login
+          debugPrint('⚠️ Token refresh failed on reconnection');
+        }
+      });
+
       // Auto-trigger sync
       _syncMerchantsInBackground();
     } else if (!isConnected && !wasOffline) {

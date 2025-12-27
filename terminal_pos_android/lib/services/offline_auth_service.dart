@@ -14,7 +14,7 @@ class OfflineAuthService {
   static const int _cacheValidityHours = 48;
 
   /// Cache agent credentials after successful online login.
-  /// The PIN is hashed before storage.
+  /// The PIN is hashed for validation and encoded for auto-refresh.
   Future<void> cacheCredentials({
     required String agentCode,
     required String pin,
@@ -23,13 +23,18 @@ class OfflineAuthService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Create salted hash of PIN
+    // Create salted hash of PIN for secure validation
     final salt = _generateSalt(agentCode);
     final pinHash = _hashPin(pin, salt);
+
+    // Encode PIN for auto-refresh (Base64 obfuscation)
+    // Note: This is less secure than hashing but needed for auto-refresh
+    final pinEncoded = base64Encode(utf8.encode(pin));
 
     // Store cached data
     final cacheData = {
       'pin_hash': pinHash,
+      'pin_encoded': pinEncoded, // For auto-refresh
       'salt': salt,
       'agent_data': agentData,
       'device_data': deviceData,
@@ -72,6 +77,25 @@ class OfflineAuthService {
     if (cachedData == null) return null;
 
     return cachedData['device_data'] as Map<String, dynamic>?;
+  }
+
+  /// Get cached PIN for auto-refresh (Base64 decoded).
+  /// Returns null if no cached PIN or cache is expired.
+  Future<String?> getCachedPin(String agentCode) async {
+    final cachedData = await _getCachedData(agentCode);
+    if (cachedData == null) return null;
+
+    // Check if cache is still valid
+    if (!await isCacheValid(agentCode)) return null;
+
+    final pinEncoded = cachedData['pin_encoded'] as String?;
+    if (pinEncoded == null) return null;
+
+    try {
+      return utf8.decode(base64Decode(pinEncoded));
+    } catch (e) {
+      return null;
+    }
   }
 
   /// Check if cached credentials are still valid (not expired).

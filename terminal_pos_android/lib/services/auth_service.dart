@@ -224,6 +224,51 @@ class AuthService {
     return prefs.getBool(_offlineModeKey) ?? false;
   }
 
+  /// Refresh token when connection is restored after offline session.
+  /// Uses cached credentials to get a new valid JWT token from the server.
+  /// Returns true if token was successfully refreshed.
+  Future<bool> refreshTokenOnReconnect() async {
+    try {
+      // Only refresh if we were in offline mode
+      final wasOffline = await isOfflineMode();
+      if (!wasOffline) return true; // Already online, token should be valid
+
+      // Check if we're actually online now
+      final isOnline = await _connectivity.checkConnectivity();
+      if (!isOnline) return false; // Still offline
+
+      // Get cached credentials
+      final prefs = await SharedPreferences.getInstance();
+      final agentCode = prefs.getString(_agentCodeKey);
+      if (agentCode == null) return false;
+
+      // Get cached PIN from offline auth service
+      final cachedPin = await _offlineAuth.getCachedPin(agentCode);
+      if (cachedPin == null) return false;
+
+      // Get device serial
+      final deviceData = await getDeviceData();
+      final deviceSerial = deviceData?['serial_number'] ?? '';
+
+      // Attempt online login to get fresh token
+      await posLogin(agentCode, cachedPin, deviceSerial);
+
+      // Success! Offline mode flag is cleared by posLogin
+      return true;
+    } catch (e) {
+      // Failed to refresh, user may need to re-login
+      return false;
+    }
+  }
+
+  /// Check if current token is valid (not an offline fake token).
+  Future<bool> hasValidOnlineToken() async {
+    final token = await getToken();
+    if (token == null) return false;
+    // Offline tokens start with 'offline_session_'
+    return !token.startsWith('offline_session_');
+  }
+
   /// Get cached credentials expiry time.
   Future<DateTime?> getOfflineCacheExpiry(String agentCode) async {
     return _offlineAuth.getCacheExpiryTime(agentCode);
