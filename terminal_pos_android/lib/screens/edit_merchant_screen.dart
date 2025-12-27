@@ -59,27 +59,45 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
     // Check offline mode first
     _isOffline = await _authService.isOfflineMode();
 
-    // FETCH LATEST DATA: Get merchant from cache with any pending offline updates
-    // This ensures we are editing the most up-to-date version
+    // FETCH LATEST DATA:
     final merchantId = widget.merchant['id'];
     Map<String, dynamic> m = widget.merchant; // Default to passed data
 
-    if (merchantId != null && merchantId is int) {
-      final latest = await _merchantCache.getMerchantWithPendingUpdates(
-        merchantId,
-      );
-      if (latest != null) {
-        m = latest;
-        debugPrint('Loaded latest merchant data from cache for edit');
+    if (!_isOffline && merchantId is int) {
+      // ONLINE: Try to get fresh data from API
+      try {
+        final freshData = await _merchantService.getMerchant(merchantId);
+        m = freshData;
+        // Update cache with fresh data so other screens see it too
+        await _merchantCache.updateCachedMerchant(merchantId, freshData);
+        debugPrint('Loaded fresh merchant data from API');
+      } catch (e) {
+        debugPrint('Failed to load from API, falling back to cache: $e');
+        // Fallback to cache
+        final latest = await _merchantCache.getMerchantWithPendingUpdates(
+          merchantId,
+        );
+        if (latest != null) m = latest;
       }
-    } else if (merchantId is String) {
-      // If string ID (offline temp ID), look it up in cache too
-      final all = await _merchantCache.getAllCachedMerchants();
-      final found = all.firstWhere(
-        (e) => e['id'] == merchantId,
-        orElse: () => {},
-      );
-      if (found.isNotEmpty) m = found;
+    } else {
+      // OFFLINE or TEMP ID: Use local cache with pending updates
+      if (merchantId != null && merchantId is int) {
+        final latest = await _merchantCache.getMerchantWithPendingUpdates(
+          merchantId,
+        );
+        if (latest != null) {
+          m = latest;
+          debugPrint('Loaded latest merchant data from cache for edit');
+        }
+      } else if (merchantId is String) {
+        // If string ID (offline temp ID), look it up in cache too
+        final all = await _merchantCache.getAllCachedMerchants();
+        final found = all.firstWhere(
+          (e) => e['id'] == merchantId,
+          orElse: () => {},
+        );
+        if (found.isNotEmpty) m = found;
+      }
     }
 
     // Populate controllers
