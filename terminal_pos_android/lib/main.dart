@@ -11,14 +11,30 @@ void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  // Global navigator key for inactivity service
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize InactivityService with the navigator key
+    InactivityService.initialize(_navigatorKey);
+  }
 
   @override
   Widget build(BuildContext context) {
     // Use system default font for POS devices without internet
     // GoogleFonts will gracefully fallback to system font when disabled
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Paysafe POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

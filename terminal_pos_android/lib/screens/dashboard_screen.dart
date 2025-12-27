@@ -60,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // Start inactivity monitoring after login
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      InactivityService.startMonitoring(context);
+      InactivityService.startMonitoring();
     });
   }
 
