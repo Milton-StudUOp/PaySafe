@@ -112,6 +112,7 @@ class OfflineMerchantQueueService {
   // ==================== UPDATES ====================
 
   /// Queue a merchant update for later sync.
+  /// If there's already a pending update for this merchant, it will be REPLACED.
   Future<String> queueMerchantUpdate({
     required dynamic merchantId, // int (server ID) or String (temp ID)
     required String merchantName,
@@ -132,12 +133,31 @@ class OfflineMerchantQueueService {
       'synced': false,
     };
 
+    // Get existing queue and REMOVE previous pending updates for this merchant
     final queue = await getQueuedUpdates();
-    queue.add(update);
+    final merchantIdStr = merchantId.toString();
 
-    await prefs.setString(_updateQueueKey, jsonEncode(queue));
+    // Remove any existing PENDING updates for the same merchant
+    final filteredQueue = queue.where((u) {
+      if (u['synced'] == true) return true; // Keep synced ones
+      final existingId = u['merchant_id'].toString();
+      if (existingId == merchantIdStr) {
+        debugPrint(
+          '🗑️ Removing previous pending update for merchant $merchantId: ${u['update_id']}',
+        );
+        return false; // Remove this one
+      }
+      return true; // Keep others
+    }).toList();
 
-    debugPrint('Queued offline merchant update: $updateId');
+    // Add the new update
+    filteredQueue.add(update);
+
+    await prefs.setString(_updateQueueKey, jsonEncode(filteredQueue));
+
+    debugPrint(
+      '✅ Queued offline merchant update: $updateId (replaced previous if any)',
+    );
     return updateId;
   }
 
