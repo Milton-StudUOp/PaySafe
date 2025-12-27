@@ -162,63 +162,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _syncMerchantsInBackground() async {
     setState(() => _syncStatus = 'Sincronizando dados...');
 
-    // ========== STEP 1: UPLOAD OFFLINE DATA FIRST ==========
-    // This must happen BEFORE downloading server data to prevent cache overwrite
-
-    // Sync offline merchants first (to get real IDs for payments)
-    final offlineMerchantResult = await _syncService
-        .syncOfflineMerchantsWithIdMapping();
-
-    if (mounted &&
-        offlineMerchantResult.success &&
-        (offlineMerchantResult.offlineMerchantCount ?? 0) > 0) {
-      setState(() {
-        _syncStatus =
-            'Sincronizado ${offlineMerchantResult.offlineMerchantCount} comerciantes offline';
-      });
-      await Future.delayed(const Duration(milliseconds: 1000));
-    }
-
-    // Then sync offline payments (they now have real merchant IDs)
-    final offlinePaymentResult = await _syncService.syncOfflinePayments();
-
-    if (mounted &&
-        offlinePaymentResult.success &&
-        (offlinePaymentResult.offlinePaymentCount ?? 0) > 0) {
-      setState(() {
-        _syncStatus =
-            'Sincronizado ${offlinePaymentResult.offlinePaymentCount} pagamentos offline';
-      });
-      await Future.delayed(const Duration(milliseconds: 1000));
-    }
-
-    // ========== STEP 2: DOWNLOAD FRESH DATA (Safe Strategy) ==========
-    // Downloads first, then clears cache internally if successful
+    // Use the new comprehensive sync that handles:
+    // 1. UPLOAD all pending offline data
+    // 2. CLEAR all synced queues and caches
+    // 3. DOWNLOAD fresh data from server
+    final result = await _syncService.performFullOnlineSync(
+      onStatusUpdate: (status) {
+        if (mounted) setState(() => _syncStatus = status);
+      },
+    );
 
     if (mounted) {
-      setState(() => _syncStatus = 'Baixando dados atualizados do servidor...');
-    }
+      if (result.success) {
+        setState(() {
+          _syncStatus = result.message;
+          _isLoading = false;
+        });
 
-    // Now safe to download - won't overwrite unsent offline data
+        // Clear status after delay
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) setState(() => _syncStatus = null);
+        });
+      } else {
+        setState(() {
+          _syncStatus = '❌ ${result.message}';
+          _isLoading = false;
+        });
 
-    // Sync merchants from server
-    final merchantResult = await _syncService.syncMerchants();
-
-    // Sync transaction history from server (CRITICAL for offline history)
-    final transactionResult = await _syncService.syncTransactions();
-
-    if (mounted && (merchantResult.success || transactionResult.success)) {
-      setState(() {
-        final mCount = merchantResult.merchantCount ?? 0;
-        final tCount = transactionResult.transactionCount ?? 0;
-        _syncStatus = 'Sincronizado: $mCount comerciantes, $tCount transações';
-        _isLoading = false;
-      });
-
-      // Clear status after delay
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _syncStatus = null);
-      });
+        // Clear error status after longer delay
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) setState(() => _syncStatus = null);
+        });
+      }
     }
   }
 

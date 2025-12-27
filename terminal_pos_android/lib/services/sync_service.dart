@@ -181,6 +181,153 @@ class SyncService {
     debugPrint('✅ Local caches cleared.');
   }
 
+  /// 🔄 FULL ONLINE SYNC: The professional way to sync data.
+  ///
+  /// Steps:
+  /// 1. UPLOAD: Send all pending offline data to server
+  /// 2. CLEAR: Remove all synced items from queues AND clear caches
+  /// 3. DOWNLOAD: Get fresh data from server
+  ///
+  /// This ensures data consistency and prevents stale cache issues.
+  Future<SyncResult> performFullOnlineSync({
+    required Function(String status) onStatusUpdate,
+  }) async {
+    debugPrint('╔════════════════════════════════════════════════════╗');
+    debugPrint('║          FULL ONLINE SYNC - START                  ║');
+    debugPrint('╚════════════════════════════════════════════════════╝');
+
+    try {
+      // ========== STEP 1: UPLOAD ALL PENDING DATA ==========
+      onStatusUpdate('Enviando dados pendentes ao servidor...');
+
+      // Sync offline merchant registrations (creates real IDs)
+      debugPrint('📤 Step 1a: Syncing offline merchant registrations...');
+      final offlineMerchantResult = await syncOfflineMerchantsWithIdMapping();
+      debugPrint('   Result: ${offlineMerchantResult.message}');
+
+      // Sync offline merchant updates
+      debugPrint('📤 Step 1b: Syncing offline merchant updates...');
+      final offlineUpdateResult = await syncOfflineMerchantUpdates();
+      debugPrint('   Result: ${offlineUpdateResult.message}');
+
+      // Sync offline payments
+      debugPrint('📤 Step 1c: Syncing offline payments...');
+      final offlinePaymentResult = await syncOfflinePayments();
+      debugPrint('   Result: ${offlinePaymentResult.message}');
+
+      // ========== STEP 2: CLEAR ALL SYNCED DATA ==========
+      onStatusUpdate('Limpando dados sincronizados...');
+
+      debugPrint('🗑️ Step 2a: Clearing synced registrations...');
+      await _offlineMerchantQueue.removeSyncedRegistrations();
+
+      debugPrint('🗑️ Step 2b: Clearing synced updates...');
+      await _offlineMerchantQueue.removeSyncedUpdates();
+
+      debugPrint('🗑️ Step 2c: Clearing synced payments...');
+      await _offlineQueue.removeSyncedPayments();
+
+      debugPrint('🗑️ Step 2d: Clearing all caches...');
+      await clearCachesForRefresh();
+
+      // Verify queues are empty
+      final pendingCount = await _offlineMerchantQueue.getPendingCount();
+      debugPrint('✅ Cleanup complete. Remaining pending items: $pendingCount');
+
+      // ========== STEP 3: DOWNLOAD FRESH DATA ==========
+      onStatusUpdate('Baixando dados atualizados do servidor...');
+
+      debugPrint('📥 Step 3a: Downloading merchants...');
+      final merchantResult = await syncMerchants();
+      debugPrint('   Result: ${merchantResult.message}');
+
+      debugPrint('📥 Step 3b: Downloading transactions...');
+      final transactionResult = await syncTransactions();
+      debugPrint('   Result: ${transactionResult.message}');
+
+      debugPrint('📥 Step 3c: Downloading markets...');
+      final marketResult = await syncMarkets();
+      debugPrint('   Result: ${marketResult.message}');
+
+      debugPrint('╔════════════════════════════════════════════════════╗');
+      debugPrint('║          FULL ONLINE SYNC - COMPLETE               ║');
+      debugPrint('╚════════════════════════════════════════════════════╝');
+
+      final mCount = merchantResult.merchantCount ?? 0;
+      final tCount = transactionResult.transactionCount ?? 0;
+
+      return SyncResult(
+        success: true,
+        message: 'Sincronizado: $mCount comerciantes, $tCount transações',
+        merchantCount: mCount,
+        transactionCount: tCount,
+      );
+    } catch (e) {
+      debugPrint('❌ FULL ONLINE SYNC FAILED: $e');
+      return SyncResult(
+        success: false,
+        message:
+            'Erro na sincronização: ${e.toString().replaceAll('Exception: ', '')}',
+      );
+    }
+  }
+
+  /// Sync offline merchant UPDATES (edits to existing merchants).
+  Future<SyncResult> syncOfflineMerchantUpdates() async {
+    debugPrint('========== SYNC OFFLINE MERCHANT UPDATES START ==========');
+
+    try {
+      final pendingUpdates = await _offlineMerchantQueue.getPendingUpdates();
+      debugPrint('📋 Found ${pendingUpdates.length} pending updates');
+
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final update in pendingUpdates) {
+        final updateId = update['update_id'] as String;
+        final merchantId = update['merchant_id'];
+        final updates = update['updates'] as Map<String, dynamic>?;
+
+        if (merchantId == null || updates == null) {
+          debugPrint('⚠️ Skipping invalid update: $updateId');
+          continue;
+        }
+
+        // Skip temp IDs (offline-created merchants not yet synced)
+        if (merchantId.toString().startsWith('OFFLINE_')) {
+          debugPrint('⏭️ Skipping temp ID update: $merchantId');
+          continue;
+        }
+
+        try {
+          debugPrint('📤 Sending update for merchant $merchantId...');
+          await _merchantService.updateMerchant(merchantId, updates);
+          await _offlineMerchantQueue.markUpdateSynced(updateId);
+          successCount++;
+          debugPrint('✅ Update synced: $updateId');
+        } catch (e) {
+          debugPrint('❌ Failed to sync update $updateId: $e');
+          failCount++;
+        }
+      }
+
+      debugPrint(
+        '========== SYNC OFFLINE MERCHANT UPDATES COMPLETE ==========',
+      );
+
+      return SyncResult(
+        success: true,
+        message: 'Sincronizado $successCount updates (falhou: $failCount)',
+        offlineMerchantCount: successCount,
+      );
+    } catch (e) {
+      return SyncResult(
+        success: false,
+        message: 'Erro ao sincronizar updates: ${e.toString()}',
+      );
+    }
+  }
+
   /// Sync offline merchants and return mapping of temp IDs to server IDs.
   /// Also updates any pending payments that reference these merchants.
   Future<SyncResult> syncOfflineMerchantsWithIdMapping() async {
