@@ -57,16 +57,13 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    // LAYER 1: INSTANT LOAD (From Navigation Args)
-    // Populate immediately so user sees data without waiting
+    // LAYER 1: FALLBACK DATA (From Navigation Args)
+    // Used as fallback if cache doesn't have this merchant
     Map<String, dynamic> m = widget.merchant;
     debugPrint('🏷️ Layer 1: widget.merchant full_name = ${m['full_name']}');
-    _populateControllers(m);
-
-    // Initial setState to show form (even while loading fresh data)
-    if (mounted) setState(() => _isLoading = false);
 
     // LAYER 2: LOCAL CACHE (Full data + Pending Offline Edits)
+    // This is the AUTHORITATIVE source - load from cache FIRST before showing form
     final merchantId = m['id'];
     debugPrint(
       '🔍 EditMerchant Layer 2: merchantId = $merchantId (type: ${merchantId.runtimeType})',
@@ -84,15 +81,22 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
           debugPrint(
             '📥 Layer 2: Loaded from cache - full_name: ${cached['full_name']}',
           );
-          m = cached;
-          if (mounted) _populateControllers(m);
+          m = cached; // Use cache data as the source of truth
         } else {
-          debugPrint('⚠️ Layer 2: Merchant not found in cache');
+          debugPrint(
+            '⚠️ Layer 2: Merchant not found in cache, using navigation args',
+          );
         }
       } catch (e) {
         debugPrint('⚠️ Cache load error: $e');
       }
     }
+
+    // NOW populate controllers with the best available data (cache or fallback)
+    _populateControllers(m);
+
+    // Show the form NOW that we have the best data
+    if (mounted) setState(() => _isLoading = false);
 
     // LAYER 3: API (Freshness)
     _isOffline = await _authService.isOfflineMode();
