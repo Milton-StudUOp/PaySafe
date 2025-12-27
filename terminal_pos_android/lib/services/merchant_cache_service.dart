@@ -425,6 +425,9 @@ class MerchantCacheService {
     try {
       merchant = merchants.firstWhere((m) => m['id'] == merchantId);
     } catch (e) {
+      debugPrint(
+        '⚠️ getMerchantWithPendingUpdates: Merchant $merchantId not in cache',
+      );
       return null;
     }
 
@@ -432,11 +435,26 @@ class MerchantCacheService {
     final offlineQueue = OfflineMerchantQueueService();
     final pendingUpdates = await offlineQueue.getPendingUpdates();
 
+    debugPrint(
+      '🔄 getMerchantWithPendingUpdates: Found ${pendingUpdates.length} pending updates',
+    );
+
     // Apply any pending updates for this merchant
     for (final update in pendingUpdates) {
-      if (update['merchant_id'] == merchantId) {
+      // TYPE-AGNOSTIC COMPARISON: Handle both int and String IDs
+      final updateMerchantId = update['merchant_id'];
+      final idsMatch = updateMerchantId.toString() == merchantId.toString();
+
+      debugPrint(
+        '  Comparing update merchant_id=$updateMerchantId (${updateMerchantId.runtimeType}) with $merchantId -> match=$idsMatch',
+      );
+
+      if (idsMatch) {
         final updates = update['updates'] as Map<String, dynamic>?;
         if (updates != null) {
+          debugPrint(
+            '  ✅ Applying pending update: full_name=${updates['full_name']}',
+          );
           merchant = {...merchant!, ...updates, 'has_pending_updates': true};
         }
       }
