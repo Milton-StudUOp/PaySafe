@@ -241,11 +241,14 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
       // ONLINE MODE: Send to API
       await _merchantService.updateMerchant(widget.merchant['id'], data);
 
+      // ALSO update local cache so changes reflect immediately
+      await _merchantCache.updateCachedMerchant(widget.merchant['id'], data);
+
       if (mounted) {
         UIUtils.showSuccessDialog(
           context,
           title: "Sucesso",
-          message: "Dados atualizados (ou solicitação enviada).",
+          message: "Dados atualizados com sucesso.",
           onDismiss: () {
             Navigator.pop(context, true); // Return true to trigger refresh
           },

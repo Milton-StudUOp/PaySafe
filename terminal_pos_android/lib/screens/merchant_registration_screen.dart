@@ -252,7 +252,13 @@ class _MerchantRegistrationScreenState
             : null,
       };
 
-      await _merchantService.createMerchantFromData(data);
+      // Create merchant via API and get the created merchant with ID
+      final createdMerchant = await _merchantService.createMerchantFromData(
+        data,
+      );
+
+      // Cache the new merchant immediately for instant visibility
+      await _merchantCache.addOfflineMerchant(createdMerchant);
 
       if (mounted) {
         UIUtils.showSuccessDialog(
