@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
@@ -279,17 +280,26 @@ class AuthService {
   }
 
   /// Validate if current token is still valid with the server.
-  /// Returns true if valid, false if expired/invalid.
-  /// Returns null if check couldn't be performed (network issue).
+  /// Returns true if valid, false if DEFINITELY expired/invalid (401/403).
+  /// Returns null if check couldn't be performed (network issue, endpoint missing, etc).
+  ///
+  /// NOTE: We are VERY permissive here - only explicit 401/403 causes logout.
+  /// Any other error (404, 500, network) returns null to allow proceeding.
   Future<bool?> validateToken() async {
     try {
       final token = await getToken();
-      if (token == null) return false;
+      if (token == null) {
+        debugPrint('⚠️ validateToken: No token stored');
+        return false;
+      }
+
+      debugPrint('🔐 validateToken: Checking token validity...');
 
       // Try a simple authenticated request to validate token
+      // Use the merchants endpoint since we know it exists
       final response = await http
           .get(
-            Uri.parse('${AppConstants.baseUrl}/auth/me'),
+            Uri.parse('${AppConstants.baseUrl}/merchants?limit=1'),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $token',
@@ -297,14 +307,24 @@ class AuthService {
           )
           .timeout(const Duration(seconds: 5));
 
+      debugPrint('🔐 validateToken: Response status ${response.statusCode}');
+
       if (response.statusCode == 200) {
+        debugPrint('✅ Token is VALID');
         return true; // Token valid
       } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return false; // Token expired/invalid
+        debugPrint('❌ Token is EXPIRED (${response.statusCode})');
+        return false; // Token definitely expired/invalid
       }
-      return null; // Other error, can't determine
-    } catch (_) {
-      return null; // Network error - can't validate
+
+      // Any other status code - can't determine, so be permissive
+      debugPrint(
+        '⚠️ validateToken: Unclear status ${response.statusCode}, assuming OK',
+      );
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ validateToken: Error $e - assuming token OK');
+      return null; // Network error - can't validate, assume OK
     }
   }
 
