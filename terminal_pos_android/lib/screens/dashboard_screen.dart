@@ -192,7 +192,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await Future.delayed(const Duration(milliseconds: 1000));
     }
 
-    // ========== STEP 2: DOWNLOAD SERVER DATA ==========
+    // ========== STEP 2: CLEAR OLD CACHE & DOWNLOAD FRESH DATA ==========
+    // Wipe old cache to ensure data integrity (Nuclear Strategy)
+    if (mounted) {
+      setState(() => _syncStatus = 'Renovando cache local...');
+    }
+    await _syncService.clearCachesForRefresh();
+
+    if (mounted) {
+      setState(() => _syncStatus = 'Baixando dados atualizados do servidor...');
+    }
+
     // Now safe to download - won't overwrite unsent offline data
 
     // Sync merchants from server

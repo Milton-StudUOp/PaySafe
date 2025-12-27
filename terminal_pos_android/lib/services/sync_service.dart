@@ -135,6 +135,16 @@ class SyncService {
     };
   }
 
+  /// Clear all cached data (server copies) to force a fresh reload.
+  /// Does NOT clear offline queues or auth data.
+  Future<void> clearCachesForRefresh() async {
+    debugPrint('🗑️ Clearing local caches for fresh sync...');
+    await _merchantCache.clearCache();
+    await _marketCache.clearCache();
+    await _transactionCache.clearCache();
+    debugPrint('✅ Local caches cleared.');
+  }
+
   /// Sync offline merchants and return mapping of temp IDs to server IDs.
   /// Also updates any pending payments that reference these merchants.
   Future<SyncResult> syncOfflineMerchantsWithIdMapping() async {
