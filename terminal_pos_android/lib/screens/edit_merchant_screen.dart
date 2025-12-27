@@ -57,51 +57,56 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    // Check offline mode first
-    _isOffline = await _authService.isOfflineMode();
+    // LAYER 1: INSTANT LOAD (From Navigation Args)
+    // Populate immediately so user sees data without waiting
+    Map<String, dynamic> m = widget.merchant;
+    _populateControllers(m);
 
-    // FETCH LATEST DATA:
-    final merchantId = widget.merchant['id'];
-    Map<String, dynamic> m = widget.merchant; // Default to passed data
+    // Initial setState to show form (even while loading fresh data)
+    if (mounted) setState(() => _isLoading = false);
 
-    if (!_isOffline && merchantId is int) {
-      // ONLINE: Try to get fresh data from API
+    // LAYER 2: LOCAL CACHE (Full data + Pending Offline Edits)
+    final merchantId = m['id'];
+    if (merchantId != null && merchantId is int) {
       try {
-        final freshData = await _merchantService.getMerchant(merchantId);
-        m = freshData;
-        // Update cache with fresh data so other screens see it too
-        await _merchantCache.updateCachedMerchant(merchantId, freshData);
-        debugPrint('Loaded fresh merchant data from API');
-      } catch (e) {
-        debugPrint('Failed to load from API, falling back to cache: $e');
-        // Fallback to cache
-        final latest = await _merchantCache.getMerchantWithPendingUpdates(
+        // This gets the cached version MERGED with any offline queue updates
+        final cached = await _merchantCache.getMerchantWithPendingUpdates(
           merchantId,
         );
-        if (latest != null) m = latest;
-      }
-    } else {
-      // OFFLINE or TEMP ID: Use local cache with pending updates
-      if (merchantId != null && merchantId is int) {
-        final latest = await _merchantCache.getMerchantWithPendingUpdates(
-          merchantId,
-        );
-        if (latest != null) {
-          m = latest;
-          debugPrint('Loaded latest merchant data from cache for edit');
+        if (cached != null) {
+          debugPrint('📥 Loaded full data from Local Cache (Clean/Dirty)');
+          m = cached;
+          if (mounted) _populateControllers(m);
         }
-      } else if (merchantId is String) {
-        // If string ID (offline temp ID), look it up in cache too
-        final all = await _merchantCache.getAllCachedMerchants();
-        final found = all.firstWhere(
-          (e) => e['id'] == merchantId,
-          orElse: () => {},
-        );
-        if (found.isNotEmpty) m = found;
+      } catch (e) {
+        debugPrint('⚠️ Cache load error: $e');
       }
     }
 
-    // Populate controllers
+    // LAYER 3: API (Freshness)
+    _isOffline = await _authService.isOfflineMode();
+    if (!_isOffline && merchantId is int) {
+      try {
+        debugPrint('🌍 Fetching from API...');
+        final freshData = await _merchantService.getMerchant(merchantId);
+
+        // Update local cache with fresh server data
+        await _merchantCache.updateCachedMerchant(merchantId, freshData);
+
+        debugPrint('✅ Loaded fresh data from API');
+        m = freshData;
+        if (mounted) _populateControllers(m);
+      } catch (e) {
+        debugPrint('❌ API load failed (using cache/args): $e');
+        // No action needed, we already have cache/args displayed
+      }
+    }
+
+    // Load markets in background
+    await _loadMarkets(m['market_id']);
+  }
+
+  void _populateControllers(Map<String, dynamic> m) {
     _fullNameController.text = m['full_name'] ?? '';
     _businessNameController.text = m['business_name'] ?? '';
     _businessTypeController.text = m['business_type'] ?? '';
@@ -114,63 +119,57 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
     _emolaController.text = m['emola_number'] ?? '';
     _mkeshController.text = m['mkesh_number'] ?? '';
 
-    // Fix type detection: Check business_type first (used by offline), then merchant_type
+    // Fix type detection and normalize logic
     String type = m['business_type'] ?? m['merchant_type'] ?? 'FIXO';
-    // Normalize string to match dropdown values usually (FIXO, AMBULANTE etc)
     if (type.toUpperCase() == 'AMBULANTE') {
       _merchantType = 'AMBULANTE';
     } else {
-      _merchantType = 'FIXO';
+      _merchantType = 'FIXO'; // Default fallback
     }
 
+    // Validate ID Type against known values if we had a dropdown (future proofing)
     _idType = m['id_document_type'] ?? 'BI';
 
-    await _loadMarkets();
+    // Trigger rebuild to update UI state
+    setState(() {});
+  }
 
-    // Set selected market after markets load
-    if (m['market_id'] != null) {
-      try {
-        final found = _markets.firstWhere(
-          (element) => element['id'] == m['market_id'],
-        );
+  Future<void> _loadMarkets(int? selectedId) async {
+    // CACHE-FIRST: Load from cache immediately
+    final cached = await _marketCache.getCachedMarkets();
+    if (cached.isNotEmpty) {
+      if (mounted) {
         setState(() {
-          _selectedMarket = found;
+          _markets = cached;
+          _trySelectMarket(selectedId);
         });
-      } catch (e) {
-        // Market might not be in list or ID changed
       }
     }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
+    if (!_isOffline) {
+      try {
+        final markets = await _marketService.getMarkets();
+        if (mounted) {
+          setState(() {
+            _markets = markets;
+            _trySelectMarket(selectedId);
+          });
+          // Cache for next time
+          await _marketCache.cacheMarkets(markets);
+        }
+      } catch (e) {
+        debugPrint("Failed to load markets: $e");
+      }
     }
   }
 
-  Future<void> _loadMarkets() async {
-    // CACHE-FIRST: Load from cache immediately
-    final cachedMarkets = await _marketCache.getCachedMarkets();
-    if (cachedMarkets.isNotEmpty) {
-      setState(() => _markets = cachedMarkets);
-    }
-
-    // If offline, only use cached markets
-    if (_isOffline) return;
-
-    // If online, try to refresh from API
+  void _trySelectMarket(int? id) {
+    if (id == null) return;
     try {
-      final markets = await _marketService.getApprovedMarkets();
-      if (markets.isNotEmpty) {
-        await _marketCache.cacheMarkets(markets);
-        setState(() => _markets = markets);
-      }
-    } catch (e) {
-      // API failed - continue with cached markets silently
-      if (_markets.isEmpty && mounted) {
-        UIUtils.showErrorSnackBar(
-          context,
-          "Erro ao carregar locais: ${e.toString().replaceAll('Exception: ', '')}",
-        );
-      }
+      final found = _markets.firstWhere((m) => m['id'] == id);
+      _selectedMarket = found;
+    } catch (_) {
+      // Market not found in list
     }
   }
 
