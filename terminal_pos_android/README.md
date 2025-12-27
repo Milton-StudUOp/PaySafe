@@ -64,9 +64,20 @@ O **PaySafe Terminal POS** é uma aplicação Flutter desenvolvida para disposit
 
 - 🔧 **Configuração remota** - URL do servidor configurável
 - 📱 **Splash com versão** - Exibição de versão da app
-- 📶 **Indicador de conexão** - Status online/offline
+- 📶 **Smart Network Monitor** - Detecção automática online/offline em tempo real
 - 📳 **Vibração** - Feedback háptico em ações
 - 🔊 **Sons** - Confirmação sonora de sucesso/erro
+
+### 🌐 Sistema Offline Avançado (NOVO)
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| **Login Offline** | Autenticação local com credenciais em cache |
+| **Cache de Comerciantes** | Acesso a comerciantes mesmo sem rede |
+| **Fila de Pagamentos** | Pagamentos em dinheiro guardados offline |
+| **Fila de Registos** | Novos comerciantes registados offline |
+| **Sincronização Automática** | Upload automático ao reconectar |
+| **UI Dinâmica** | AppBar e botões reagem ao estado da rede em tempo real |
 
 ---
 
@@ -108,17 +119,24 @@ terminal_pos_android/
 │   │   ├── pin_reset_screen.dart
 │   │   └── settings_screen.dart
 │   ├── services/                 # Lógica de negócio
-│   │   ├── auth_service.dart
-│   │   ├── agent_service.dart
-│   │   ├── merchant_service.dart
-│   │   ├── transaction_service.dart
-│   │   ├── market_service.dart
+│   │   ├── auth_service.dart           # Autenticação (online + offline)
+│   │   ├── offline_auth_service.dart   # Cache de credenciais (NOVO)
+│   │   ├── connectivity_service.dart   # Monitor de rede em tempo real
+│   │   ├── sync_service.dart           # Sincronização bidirecional (NOVO)
+│   │   ├── merchant_service.dart       # CRUD comerciantes (API)
+│   │   ├── merchant_cache_service.dart # Cache local de comerciantes (NOVO)
+│   │   ├── market_service.dart         # Lista de mercados (API)
+│   │   ├── market_cache_service.dart   # Cache local de mercados (NOVO)
+│   │   ├── transaction_service.dart    # Transações (API)
+│   │   ├── transaction_cache_service.dart # Cache de transações (NOVO)
+│   │   ├── offline_payment_queue_service.dart # Fila de pagamentos (NOVO)
+│   │   ├── offline_merchant_queue_service.dart # Fila de registos (NOVO)
 │   │   ├── device_service.dart
-│   │   ├── connectivity_service.dart
 │   │   ├── feedback_service.dart
 │   │   └── inactivity_service.dart
 │   └── utils/                    # Utilitários
-│       └── constants.dart
+│       ├── constants.dart
+│       └── ui_utils.dart
 ├── android/                      # Configuração Android nativa
 ├── pubspec.yaml                  # Dependências
 └── README.md
@@ -234,13 +252,17 @@ Aceder a **Configurações** na app e alterar a URL do servidor.
 
 | Serviço | Ficheiro | Descrição |
 |---------|----------|-----------|
-| **AuthService** | `auth_service.dart` | Autenticação, tokens JWT |
-| **AgentService** | `agent_service.dart` | Dados do agente logado |
-| **MerchantService** | `merchant_service.dart` | CRUD de comerciantes |
-| **TransactionService** | `transaction_service.dart` | Criação de transações |
-| **MarketService** | `market_service.dart` | Lista de mercados |
-| **DeviceService** | `device_service.dart` | Info do dispositivo POS |
-| **ConnectivityService** | `connectivity_service.dart` | Monitorização online/offline |
+| **AuthService** | `auth_service.dart` | Autenticação, tokens JWT, suporte offline |
+| **OfflineAuthService** | `offline_auth_service.dart` | Cache de credenciais para login offline |
+| **ConnectivityService** | `connectivity_service.dart` | Monitor de rede em tempo real (5s) |
+| **SyncService** | `sync_service.dart` | Sincronização bidirecional de dados |
+| **MerchantService** | `merchant_service.dart` | CRUD de comerciantes via API |
+| **MerchantCacheService** | `merchant_cache_service.dart` | Cache local de comerciantes |
+| **MarketCacheService** | `market_cache_service.dart` | Cache local de mercados |
+| **TransactionService** | `transaction_service.dart` | Criação de transações via API |
+| **TransactionCacheService** | `transaction_cache_service.dart` | Cache local de transações |
+| **OfflinePaymentQueueService** | `offline_payment_queue_service.dart` | Fila de pagamentos offline |
+| **OfflineMerchantQueueService** | `offline_merchant_queue_service.dart` | Fila de registos offline |
 | **FeedbackService** | `feedback_service.dart` | Vibração e sons |
 | **InactivityService** | `inactivity_service.dart` | Auto-logout por inactividade |
 
@@ -335,18 +357,58 @@ class AuthService {
 
 ```dart
 class ConnectivityService extends ChangeNotifier {
+  // Stream para atualizações em tempo real
+  Stream<bool> get connectionStream;
+  
   // Status de conexão
   bool get isOnline;
   bool get isServerReachable;
   bool get isConnected;
   
-  // Monitorização
+  // Monitorização (default: 5 segundos)
   void startMonitoring({Duration interval});
   void stopMonitoring();
   Future<bool> checkConnectivity();
   
   // Mensagem de status
   String get statusMessage;
+}
+```
+
+### SyncService
+
+```dart
+class SyncService {
+  // Sincronização completa
+  Future<SyncResult> syncAll();
+  
+  // Sincronização de comerciantes offline (com mapeamento de IDs)
+  Future<SyncResult> syncOfflineMerchantsWithIdMapping();
+  
+  // Sincronização de pagamentos offline
+  Future<SyncResult> syncOfflinePayments();
+  
+  // Download de dados do servidor
+  Future<SyncResult> syncMerchants();
+  Future<SyncResult> syncTransactions();
+}
+```
+
+### OfflinePaymentQueueService
+
+```dart
+class OfflinePaymentQueueService {
+  // Adicionar pagamento à fila
+  Future<void> queuePayment({...});
+  
+  // Obter pagamentos pendentes
+  Future<List<Map<String, dynamic>>> getPendingPayments();
+  
+  // Marcar como sincronizado
+  Future<void> markAsSynced(String paymentId);
+  
+  // Atualizar dados do comerciante em pagamentos pendentes
+  Future<int> updateMerchantData({required dynamic merchantId, String? newName});
 }
 ```
 
