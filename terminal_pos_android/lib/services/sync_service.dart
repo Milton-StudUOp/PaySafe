@@ -260,6 +260,57 @@ class SyncService {
 
           debugPrint('✅ Synced offline merchant: $tempId -> $serverId');
         } catch (e) {
+          final errorMsg = e.toString();
+
+          // IDEMPOTENCY HANDLER: If merchant already exists (Duplicate NFC), recover gracefully
+          if (errorMsg.contains('Já existe') &&
+              errorMsg.contains('NFC') &&
+              finalData['nfc_uid'] != null) {
+            debugPrint(
+              '⚠️ Merchant already exists on server. Attempting recovery by NFC lookup...',
+            );
+
+            try {
+              final existingMerchant = await _merchantService.getMerchantByNfc(
+                finalData['nfc_uid'],
+              );
+
+              if (existingMerchant != null) {
+                final serverId = existingMerchant['id'] as int;
+                debugPrint(
+                  '✅ Recovered ID: $serverId for duplicated merchant.',
+                );
+
+                // Treat as success: Map IDs and clear queue
+                idMapping[tempId] = serverId;
+
+                // IMPORTANT: We do NOT use local data to overwrite server in this case,
+                // we assume server data is the source of truth for the existing merchant.
+                // However, we MUST map the ID for payments to work.
+
+                // Link pending payments to real ID
+                await _updatePendingPaymentsMerchantId(tempId, serverId);
+
+                // Update local cache to match server
+                await _updateMerchantCacheWithRealId(
+                  tempId,
+                  serverId,
+                  existingMerchant,
+                );
+
+                // Mark as synced
+                await _offlineMerchantQueue.markRegistrationSynced(
+                  tempId,
+                  serverId,
+                );
+                syncedCount++;
+                continue; // Skip the failedCount++ below
+              }
+            } catch (recoveryError) {
+              debugPrint('❌ Recovery failed: $recoveryError');
+            }
+          }
+
           failedCount++;
           debugPrint(
             '❌ Failed to sync offline merchant ${registration['temp_id']}: $e',
