@@ -42,12 +42,13 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
   final _notesController = TextEditingController();
 
   // State
-  bool _isLoading = false;
+  // State
+  bool _isLoading = true; // Start true to prevent LateInitializationError
   bool _isOffline = false;
   List<Map<String, dynamic>> _markets = [];
   Map<String, dynamic>? _selectedMarket;
-  late String _merchantType;
-  late String _idType;
+  String _merchantType = 'FIXO'; // Default safe value
+  String _idType = 'BI'; // Default safe value
 
   @override
   void initState() {
@@ -138,6 +139,10 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
       } catch (e) {
         // Market might not be in list or ID changed
       }
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
