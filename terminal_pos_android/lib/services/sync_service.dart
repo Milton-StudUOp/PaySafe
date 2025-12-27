@@ -48,6 +48,8 @@ class SyncService {
       final merchants = await _merchantService.getMerchantsByMarket(marketId);
 
       // Cache them locally
+      // NUCLEAR: Clear old cache first to remove orphans, BUT only after successful download
+      await _merchantCache.clearCache();
       await _merchantCache.cacheMerchants(
         marketId: marketId,
         merchants: merchants,
@@ -93,6 +95,8 @@ class SyncService {
       );
 
       // Cache them locally
+      // NUCLEAR: Clear old cache first to remove orphans, BUT only after successful download
+      await _transactionCache.clearCache();
       await _transactionCache.cacheTransactions(
         agentId: agentId,
         transactions: transactions,
