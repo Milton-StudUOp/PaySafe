@@ -47,7 +47,8 @@ class ConnectivityService extends ChangeNotifier {
   void stopMonitoring() {
     _checkTimer?.cancel();
     _checkTimer = null;
-    _connectionInfoController.close();
+    // NOTE: Do NOT close the StreamController! This is a singleton service
+    // and closing would break all other screens still listening.
   }
 
   /// Manually check connectivity.
@@ -74,10 +75,14 @@ class ConnectivityService extends ChangeNotifier {
       _isServerReachable = false;
     }
 
-    // Notify listeners if status changed
+    // Always emit current state for real-time UI updates
+    if (!_connectionInfoController.isClosed) {
+      _connectionInfoController.add(isConnected);
+    }
+
+    // Notify ChangeNotifier listeners if status changed
     if (isConnected != previousStatus) {
       notifyListeners();
-      _connectionInfoController.add(isConnected);
       debugPrint(
         '🌐 Connectivity changed: ${isConnected ? "ONLINE" : "OFFLINE"}',
       );
