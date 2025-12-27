@@ -96,4 +96,19 @@ class TransactionService {
       throw Exception('Erro ao buscar transações');
     }
   }
+
+  /// Get transaction history for the last N days (for caching).
+  Future<List<Map<String, dynamic>>> getTransactionHistory({
+    int days = 8,
+    int limit = 500,
+  }) async {
+    final endDate = DateTime.now();
+    final startDate = endDate.subtract(Duration(days: days));
+
+    return getTransactions(
+      limit: limit,
+      startDate: startDate.toIso8601String().split('T')[0],
+      endDate: endDate.toIso8601String().split('T')[0],
+    );
+  }
 }

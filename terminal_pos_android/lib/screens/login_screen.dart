@@ -489,8 +489,11 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception("PIN deve ter 6 dígitos.");
       }
 
-      // Use posLogin with device UUID
-      final data = await _authService.posLogin(agentCode, pin, _deviceUuid);
+      // Use smartLogin: tries online first,  falls back to offline
+      final data = await _authService.smartLogin(agentCode, pin, _deviceUuid);
+
+      // Check if login was offline
+      final isOffline = data['offline'] == true;
 
       // Role Check Logic: ONLY AGENTE ALLOWED on POS terminal
       final role = data['user']['role'];
@@ -509,7 +512,9 @@ class _LoginScreenState extends State<LoginScreen> {
       Future.delayed(const Duration(milliseconds: 800), () {
         if (mounted) {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+            MaterialPageRoute(
+              builder: (_) => DashboardScreen(isOfflineMode: isOffline),
+            ),
           );
         }
       });

@@ -9,7 +9,14 @@ import 'receipt_screen.dart';
 import '../services/transaction_service.dart';
 import '../services/merchant_service.dart';
 import '../services/market_service.dart';
+import '../services/market_cache_service.dart';
+import '../services/merchant_cache_service.dart';
+import '../services/auth_service.dart';
+import '../services/offline_payment_queue_service.dart';
+import '../services/offline_merchant_queue_service.dart';
+import '../services/connectivity_service.dart'; // Added
 import '../utils/ui_utils.dart';
+import 'dart:async'; // For StreamSubscription
 
 class PaymentScreen extends StatefulWidget {
   final Map<String, dynamic>? preSelectedMerchant;
@@ -21,6 +28,9 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   final _transactionService = TransactionService();
+  final _authService = AuthService();
+  final _offlineQueue = OfflinePaymentQueueService();
+  final _connectivityService = ConnectivityService(); // Added
 
   // Controllers
   final _merchantIdController = TextEditingController();
@@ -31,12 +41,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String _currentStep = 'MERCHANT';
   Map<String, dynamic>? _selectedMerchant;
   bool _isLoading = false;
+  bool _isOffline = false;
   String? _errorMessage;
   String _selectedMethod = "DINHEIRO";
+
+  // Network monitoring
+  StreamSubscription<bool>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
+    _checkOfflineMode();
+
+    // Listen to real-time connectivity changes
+    _connectivitySubscription = _connectivityService.connectionStream.listen((
+      isConnected,
+    ) {
+      if (mounted) {
+        setState(() {
+          _isOffline = !isConnected;
+          // Force cash only in offline mode
+          if (_isOffline) {
+            _selectedMethod = 'DINHEIRO';
+          }
+        });
+      }
+    });
+
     if (widget.preSelectedMerchant != null) {
       _selectedMerchant = widget.preSelectedMerchant;
       _currentStep = 'AMOUNT';
@@ -46,8 +77,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  Future<void> _checkOfflineMode() async {
+    // Check initial mode from auth
+    final isOfflineLogin = await _authService.isOfflineMode();
+    // Also check current network state
+    final isConnected = await _connectivityService.checkConnectivity();
+
+    if (mounted) {
+      setState(() {
+        _isOffline = isOfflineLogin || !isConnected;
+        // Force cash only in offline mode
+        if (_isOffline) {
+          _selectedMethod = 'DINHEIRO';
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _connectivitySubscription?.cancel(); // Cleanup network listener
     NfcManager.instance.stopSession();
     super.dispose();
   }
@@ -121,22 +170,40 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       final merchantService = MerchantService();
       final marketService = MarketService();
+      final merchantCache = MerchantCacheService();
 
-      // Strict NFC Lookup
-      final merchant = await merchantService.getMerchantByNfc(input);
+      Map<String, dynamic>? merchant;
+
+      // Try cache first for faster lookup and offline support
+      merchant = await merchantCache.getMerchantByNfc(input);
+
+      // If not in cache, try API
+      if (merchant == null) {
+        try {
+          merchant = await merchantService.getMerchantByNfc(input);
+        } catch (e) {
+          // API failed, cache might be available
+          debugPrint('API lookup failed: $e');
+        }
+      }
 
       if (merchant == null) {
         throw Exception('Comerciante não encontrado');
       }
 
-      // Fetch market to enrich merchant data
+      // Fetch market to enrich merchant data (skip if market info already cached)
       final marketId = merchant['market_id'];
-      if (marketId != null) {
-        final market = await marketService.getMarketById(marketId);
-        if (market != null) {
-          merchant['market_name'] = market['name'];
-          merchant['market_province'] = market['province'];
-          merchant['market_district'] = market['district'];
+      if (marketId != null && merchant['market_name'] == null) {
+        try {
+          final market = await marketService.getMarketById(marketId);
+          if (market != null) {
+            merchant['market_name'] = market['name'];
+            merchant['market_province'] = market['province'];
+            merchant['market_district'] = market['district'];
+          }
+        } catch (e) {
+          // Market fetch failed, continue without enrichment
+          debugPrint('Market lookup failed: $e');
         }
       }
 
@@ -230,7 +297,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     try {
       final amount = double.tryParse(_amountController.text) ?? 0.0;
-      final merchantId = _selectedMerchant?['id'] ?? 0;
+
+      // Handle merchant ID - can be int or String (for offline-registered merchants)
+      final rawMerchantId = _selectedMerchant?['id'];
+      final merchantId = rawMerchantId is int
+          ? rawMerchantId
+          : (rawMerchantId is String && !rawMerchantId.startsWith('OFFLINE'))
+          ? int.tryParse(rawMerchantId) ?? 0
+          : 0; // Offline merchant with temp ID
 
       // Get logged-in agent and device data
       final prefs = await SharedPreferences.getInstance();
@@ -247,7 +321,57 @@ class _PaymentScreenState extends State<PaymentScreen> {
         deviceData = json.decode(deviceDataString);
       }
 
-      // Build payment request matching backend PaymentRequest schema
+      // OFFLINE MODE: Queue cash payment locally
+      if (_isOffline && _selectedMethod == 'DINHEIRO') {
+        // Check if merchant is an offline-registered one (has temp ID)
+        final rawMerchantId = _selectedMerchant?['id'];
+        final merchantTempId =
+            (rawMerchantId is String && rawMerchantId.startsWith('OFFLINE'))
+            ? rawMerchantId
+            : null;
+
+        final tempId = await _offlineQueue.queueCashPayment(
+          merchantId: merchantId,
+          merchantName: _selectedMerchant?['full_name'] ?? 'Comerciante',
+          amount: amount,
+          agentId: agentData?['id'] ?? 0,
+          agentName: agentData?['name'] ?? 'Agente',
+          posId: deviceData?['id'],
+          merchantTempId: merchantTempId, // For sync ID resolution
+        );
+
+        // Generate offline receipt
+        final receiptData = _offlineQueue.generateOfflineReceipt(
+          tempId: tempId,
+          merchantName: _selectedMerchant?['full_name'] ?? 'Comerciante',
+          amount: amount,
+          agentName: agentData?['name'] ?? 'Agente',
+        );
+        receiptData['merchant'] = _selectedMerchant;
+        receiptData['agent'] = agentData;
+
+        if (mounted) {
+          setState(() => _isLoading = false);
+
+          // Show offline success dialog
+          UIUtils.showSuccessDialog(
+            context,
+            title: "Pagamento Registrado!",
+            message:
+                "Pagamento em dinheiro registrado offline.\nSerá sincronizado quando conectar ao servidor.",
+            onDismiss: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => ReceiptScreen(transactionData: receiptData),
+                ),
+              );
+            },
+          );
+        }
+        return;
+      }
+
+      // ONLINE MODE: Process normally via API
       final txData = {
         "merchant_id": merchantId,
         "pos_id": deviceData?['id'],
@@ -689,17 +813,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
 
-    // Load markets from agent's jurisdiction
+    // Load markets - cache-first pattern (same as merchant registration)
     final marketService = MarketService();
+    final marketCache = MarketCacheService();
     List<Map<String, dynamic>> markets = [];
     Map<String, dynamic>? selectedMarket;
     bool loadingMarkets = true;
     String? errorMessage; // For inline error display
 
-    try {
-      markets = await marketService.getApprovedMarkets();
-    } catch (e) {
-      debugPrint('Error loading markets: $e');
+    // Try cache first for instant display
+    final cachedMarkets = await marketCache.getCachedMarkets();
+    if (cachedMarkets.isNotEmpty) {
+      markets = cachedMarkets;
+    }
+
+    // Try API if online (updates cache silently)
+    if (!_isOffline) {
+      try {
+        final apiMarkets = await marketService.getApprovedMarkets();
+        if (apiMarkets.isNotEmpty) {
+          markets = apiMarkets;
+          await marketCache.cacheMarkets(apiMarkets);
+        }
+      } catch (e) {
+        debugPrint('Error loading markets from API: $e');
+        // Continue with cached markets if API fails
+      }
     }
     loadingMarkets = false;
 
@@ -979,7 +1118,70 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             });
 
                             try {
-                              // Call API to create ambulante and get real merchant_id
+                              // Import offline queue service
+                              final offlineQueue =
+                                  OfflineMerchantQueueService();
+                              final merchantCache = MerchantCacheService();
+
+                              // OFFLINE MODE: Queue registration and create temp merchant
+                              if (_isOffline) {
+                                final tempId = await offlineQueue
+                                    .queueMerchantRegistration(
+                                      fullName: nameController.text.trim(),
+                                      phoneNumber:
+                                          phoneController.text.trim().isNotEmpty
+                                          ? phoneController.text.trim()
+                                          : null,
+                                      marketId: selectedMarket!['id'],
+                                      nfcUid: null,
+                                      mpesaNumber:
+                                          phoneController.text.trim().isNotEmpty
+                                          ? phoneController.text.trim()
+                                          : null,
+                                      emolaNumber: null,
+                                      mkeshNumber: null,
+                                      agentId: 0, // Will be set during sync
+                                      agentName: 'Agente',
+                                    );
+
+                                // Create temp merchant object for payment flow
+                                final tempMerchant = {
+                                  'id': tempId,
+                                  'full_name': nameController.text.trim(),
+                                  'phone_number':
+                                      phoneController.text.trim().isNotEmpty
+                                      ? phoneController.text.trim()
+                                      : null,
+                                  'market_id': selectedMarket!['id'],
+                                  'mpesa_number':
+                                      phoneController.text.trim().isNotEmpty
+                                      ? phoneController.text.trim()
+                                      : null,
+                                  'merchant_type': 'AMBULANTE',
+                                  'is_offline_pending': true,
+                                };
+
+                                // Add to cache for immediate availability
+                                await merchantCache.addOfflineMerchant(
+                                  tempMerchant,
+                                );
+
+                                // Close modal
+                                Navigator.of(context).pop();
+
+                                // Update parent state with temp merchant
+                                setState(() {
+                                  _selectedMerchant = tempMerchant;
+                                  if (phoneController.text.trim().isNotEmpty) {
+                                    _customerNumberController.text =
+                                        phoneController.text.trim();
+                                  }
+                                  _currentStep = 'AMOUNT';
+                                });
+                                return;
+                              }
+
+                              // ONLINE MODE: Call API to create ambulante
                               final merchantService = MerchantService();
                               final createdMerchant = await merchantService
                                   .createAmbulante(
@@ -1274,29 +1476,90 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Widget _methodButton(String label, String value, Color color) {
     final isSelected = _selectedMethod == value;
-    return InkWell(
-      onTap: () => setState(() {
-        _selectedMethod = value;
-        // Reset customer number and error when switching methods
-        _customerNumberController.clear();
-        _errorMessage = null;
-      }),
-      child: Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
-          border: Border.all(
-            color: isSelected ? color : Colors.grey.shade200,
-            width: 2,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.bold,
-            color: isSelected ? color : Colors.grey.shade600,
-          ),
+    final isMobileMoney = value != 'DINHEIRO';
+    final isDisabled = _isOffline && isMobileMoney;
+
+    return Tooltip(
+      message: isDisabled ? 'Indisponível no modo offline' : '',
+      child: InkWell(
+        onTap: isDisabled
+            ? () => UIUtils.showErrorSnackBar(
+                context,
+                'Pagamentos móveis requerem conexão com o servidor',
+              )
+            : () => setState(() {
+                _selectedMethod = value;
+                // Reset customer number and error when switching methods
+                _customerNumberController.clear();
+                _errorMessage = null;
+              }),
+        child: Stack(
+          children: [
+            Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isDisabled
+                    ? Colors.grey.shade100
+                    : isSelected
+                    ? color.withOpacity(0.1)
+                    : Colors.white,
+                border: Border.all(
+                  color: isDisabled
+                      ? Colors.grey.shade300
+                      : isSelected
+                      ? color
+                      : Colors.grey.shade200,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      color: isDisabled
+                          ? Colors.grey.shade400
+                          : isSelected
+                          ? color
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                  if (isDisabled)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Offline',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Lock icon overlay for disabled buttons
+            if (isDisabled)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    LucideIcons.lock,
+                    size: 10,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

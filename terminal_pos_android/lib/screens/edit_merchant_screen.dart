@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/market_service.dart';
+import '../services/market_cache_service.dart';
 import '../services/merchant_service.dart';
+import '../services/merchant_cache_service.dart';
 import '../services/nfc_scan_service.dart';
+import '../services/auth_service.dart';
+import '../services/offline_merchant_queue_service.dart';
 import '../utils/ui_utils.dart';
 
 class EditMerchantScreen extends StatefulWidget {
@@ -18,7 +22,11 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
 
   // Services
   final _marketService = MarketService();
+  final _marketCache = MarketCacheService();
   final _merchantService = MerchantService();
+  final _merchantCache = MerchantCacheService();
+  final _authService = AuthService();
+  final _offlineQueue = OfflineMerchantQueueService();
 
   // Controllers
   final _fullNameController = TextEditingController();
@@ -35,6 +43,7 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
 
   // State
   bool _isLoading = false;
+  bool _isOffline = false;
   List<Map<String, dynamic>> _markets = [];
   Map<String, dynamic>? _selectedMarket;
   late String _merchantType;
@@ -47,8 +56,33 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    // Populate controllers from widget.merchant
-    final m = widget.merchant;
+    // Check offline mode first
+    _isOffline = await _authService.isOfflineMode();
+
+    // FETCH LATEST DATA: Get merchant from cache with any pending offline updates
+    // This ensures we are editing the most up-to-date version
+    final merchantId = widget.merchant['id'];
+    Map<String, dynamic> m = widget.merchant; // Default to passed data
+
+    if (merchantId != null && merchantId is int) {
+      final latest = await _merchantCache.getMerchantWithPendingUpdates(
+        merchantId,
+      );
+      if (latest != null) {
+        m = latest;
+        debugPrint('Loaded latest merchant data from cache for edit');
+      }
+    } else if (merchantId is String) {
+      // If string ID (offline temp ID), look it up in cache too
+      final all = await _merchantCache.getAllCachedMerchants();
+      final found = all.firstWhere(
+        (e) => e['id'] == merchantId,
+        orElse: () => {},
+      );
+      if (found.isNotEmpty) m = found;
+    }
+
+    // Populate controllers
     _fullNameController.text = m['full_name'] ?? '';
     _businessNameController.text = m['business_name'] ?? '';
     _businessTypeController.text = m['business_type'] ?? '';
@@ -61,7 +95,15 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
     _emolaController.text = m['emola_number'] ?? '';
     _mkeshController.text = m['mkesh_number'] ?? '';
 
-    _merchantType = m['merchant_type'] ?? 'FIXO';
+    // Fix type detection: Check business_type first (used by offline), then merchant_type
+    String type = m['business_type'] ?? m['merchant_type'] ?? 'FIXO';
+    // Normalize string to match dropdown values usually (FIXO, AMBULANTE etc)
+    if (type.toUpperCase() == 'AMBULANTE') {
+      _merchantType = 'AMBULANTE';
+    } else {
+      _merchantType = 'FIXO';
+    }
+
     _idType = m['id_document_type'] ?? 'BI';
 
     await _loadMarkets();
@@ -82,19 +124,25 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
   }
 
   Future<void> _loadMarkets() async {
+    // CACHE-FIRST: Load from cache immediately
+    final cachedMarkets = await _marketCache.getCachedMarkets();
+    if (cachedMarkets.isNotEmpty) {
+      setState(() => _markets = cachedMarkets);
+    }
+
+    // If offline, only use cached markets
+    if (_isOffline) return;
+
+    // If online, try to refresh from API
     try {
       final markets = await _marketService.getApprovedMarkets();
-      setState(() {
-        _markets = markets;
-        if (markets.isEmpty && mounted) {
-          UIUtils.showErrorSnackBar(
-            context,
-            "Nenhum mercado disponível na sua jurisdição.",
-          );
-        }
-      });
+      if (markets.isNotEmpty) {
+        await _marketCache.cacheMarkets(markets);
+        setState(() => _markets = markets);
+      }
     } catch (e) {
-      if (mounted) {
+      // API failed - continue with cached markets silently
+      if (_markets.isEmpty && mounted) {
         UIUtils.showErrorSnackBar(
           context,
           "Erro ao carregar locais: ${e.toString().replaceAll('Exception: ', '')}",
@@ -120,10 +168,17 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
     });
 
     try {
+      // Map merchant_type to business_type for consistency
+      final businessType = _merchantType == 'AMBULANTE'
+          ? 'AMBULANTE'
+          : (_businessTypeController.text.trim().isEmpty
+                ? 'FIXO'
+                : _businessTypeController.text.trim());
+
       final data = {
         "full_name": _fullNameController.text.trim(),
         "merchant_type": _merchantType,
-        "business_type": _businessTypeController.text.trim(),
+        "business_type": businessType,
         "business_name": _businessNameController.text.trim(),
         "market_id": _selectedMarket?['id'],
         "requester_notes": _notesController.text.trim(),
@@ -154,6 +209,36 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
             : _idExpiryController.text.trim(),
       };
 
+      // OFFLINE MODE: Queue update for later sync
+      if (_isOffline) {
+        final merchantId = widget.merchant['id'];
+        final merchantName = widget.merchant['full_name'] ?? 'Comerciante';
+
+        await _offlineQueue.queueMerchantUpdate(
+          merchantId: merchantId, // Can be int or String (temp ID)
+          merchantName: merchantName,
+          updates: data,
+          agentId: 0, // Will be resolved during sync
+        );
+
+        // IMMEDIATELY UPDATE CACHE: Changes reflect on next query
+        await _merchantCache.updateCachedMerchant(merchantId, data);
+
+        if (mounted) {
+          UIUtils.showSuccessDialog(
+            context,
+            title: "Alteração Salva!",
+            message:
+                "Alterações salvas offline.\nSerão sincronizadas quando conectar ao servidor.",
+            onDismiss: () {
+              Navigator.pop(context, true); // Return true to indicate update
+            },
+          );
+        }
+        return;
+      }
+
+      // ONLINE MODE: Send to API
       await _merchantService.updateMerchant(widget.merchant['id'], data);
 
       if (mounted) {
@@ -162,8 +247,7 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
           title: "Sucesso",
           message: "Dados atualizados (ou solicitação enviada).",
           onDismiss: () {
-            Navigator.pop(context); // Screen
-            // Ideally refresh search screen, but it will refresh on next search
+            Navigator.pop(context, true); // Return true to trigger refresh
           },
         );
       }

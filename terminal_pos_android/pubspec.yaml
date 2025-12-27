@@ -43,6 +43,7 @@ dependencies:
   decimal: ^2.3.3
   nfc_manager: ^3.3.0
   device_info_plus: ^10.1.0
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:

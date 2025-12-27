@@ -11,6 +11,12 @@ class ConnectivityService extends ChangeNotifier {
   factory ConnectivityService() => _instance;
   ConnectivityService._internal();
 
+  // Stream controller for broadcasting connectivity changes
+  final _connectionInfoController = StreamController<bool>.broadcast();
+
+  /// Stream of connectivity status (true = connected to server).
+  Stream<bool> get connectionStream => _connectionInfoController.stream;
+
   bool _isOnline = true;
   bool _isServerReachable = true;
   Timer? _checkTimer;
@@ -29,7 +35,8 @@ class ConnectivityService extends ChangeNotifier {
   DateTime? get lastCheck => _lastCheck;
 
   /// Start periodic connectivity checks.
-  void startMonitoring({Duration interval = const Duration(seconds: 30)}) {
+  /// Default interval is 5 seconds for near real-time updates.
+  void startMonitoring({Duration interval = const Duration(seconds: 5)}) {
     _checkTimer?.cancel();
     _checkTimer = Timer.periodic(interval, (_) => checkConnectivity());
     // Initial check
@@ -40,32 +47,42 @@ class ConnectivityService extends ChangeNotifier {
   void stopMonitoring() {
     _checkTimer?.cancel();
     _checkTimer = null;
+    _connectionInfoController.close();
   }
 
   /// Manually check connectivity.
   Future<bool> checkConnectivity() async {
     _lastCheck = DateTime.now();
+    final bool previousStatus = isConnected;
 
-    // Check internet connectivity
+    // Check internet connectivity (DNS)
+    bool hasInternet = false;
     try {
       final result = await InternetAddress.lookup(
         'google.com',
       ).timeout(const Duration(seconds: 5));
-      _isOnline = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } on SocketException catch (_) {
-      _isOnline = false;
-    } on TimeoutException catch (_) {
-      _isOnline = false;
+      hasInternet = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      hasInternet = false;
     }
+    _isOnline = hasInternet;
 
-    // Check server reachability
+    // Check server reachability (Health Check)
     if (_isOnline) {
       _isServerReachable = await _checkServerReachability();
     } else {
       _isServerReachable = false;
     }
 
-    notifyListeners();
+    // Notify listeners if status changed
+    if (isConnected != previousStatus) {
+      notifyListeners();
+      _connectionInfoController.add(isConnected);
+      debugPrint(
+        '🌐 Connectivity changed: ${isConnected ? "ONLINE" : "OFFLINE"}',
+      );
+    }
+
     return isConnected;
   }
 
@@ -91,7 +108,7 @@ class ConnectivityService extends ChangeNotifier {
   /// Get a human-readable status message.
   String get statusMessage {
     if (!_isOnline) {
-      return 'Sem conexão à internet';
+      return 'Sem internet';
     } else if (!_isServerReachable) {
       return 'Servidor indisponível';
     } else {
@@ -101,7 +118,9 @@ class ConnectivityService extends ChangeNotifier {
 
   @override
   void dispose() {
-    stopMonitoring();
+    _checkTimer?.cancel();
+    // Do not close stream here if it's a singleton used heavily,
+    // or ensure meaningful re-init. But standard pattern is ok.
     super.dispose();
   }
 }

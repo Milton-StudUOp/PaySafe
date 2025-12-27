@@ -2,17 +2,25 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
+import 'offline_auth_service.dart';
+import 'connectivity_service.dart';
 
 /// Service for authentication using the backend API.
 /// Uses /api/v1/auth/pos-login for POS device login with agent-device binding.
+/// Supports offline login fallback when backend is unavailable.
 class AuthService {
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
   static const String _deviceKey = 'device_data';
   static const String _agentCodeKey = 'last_agent_code';
+  static const String _offlineModeKey = 'is_offline_mode';
+
+  final OfflineAuthService _offlineAuth = OfflineAuthService();
+  final ConnectivityService _connectivity = ConnectivityService();
 
   /// Perform POS login with device-agent binding validation.
   /// Returns user data on success, throws exception on failure.
+  /// Caches credentials for offline login on success.
   Future<Map<String, dynamic>> posLogin(
     String agentCode,
     String pin,
@@ -40,6 +48,15 @@ class AuthService {
         await prefs.setString(_userKey, jsonEncode(data['user']));
         await prefs.setString(_deviceKey, jsonEncode(data['device']));
         await prefs.setString(_agentCodeKey, agentCode);
+        await prefs.setBool(_offlineModeKey, false); // Clear offline mode
+
+        // Cache credentials for offline login
+        await _offlineAuth.cacheCredentials(
+          agentCode: agentCode,
+          pin: pin,
+          agentData: data['user'] as Map<String, dynamic>,
+          deviceData: data['device'] as Map<String, dynamic>?,
+        );
 
         return data;
       } else {
@@ -127,7 +144,94 @@ class AuthService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
     await prefs.remove(_deviceKey);
+    await prefs.remove(_offlineModeKey);
     // Keep last agent code for convenience on next login
+  }
+
+  /// Attempt offline login using cached credentials.
+  /// Returns user data if cache is valid, throws exception otherwise.
+  Future<Map<String, dynamic>> offlineLogin(
+    String agentCode,
+    String pin,
+  ) async {
+    // Check if cached credentials exist and are valid
+    if (!await _offlineAuth.isCacheValid(agentCode)) {
+      throw Exception(
+        'Credenciais offline expiradas. Conecte-se online para renovar.',
+      );
+    }
+
+    // Validate PIN against cached hash
+    final isValid = await _offlineAuth.validateOffline(agentCode, pin);
+    if (!isValid) {
+      throw Exception('PIN incorreto');
+    }
+
+    // Get cached data
+    final agentData = await _offlineAuth.getCachedAgentData(agentCode);
+    final deviceData = await _offlineAuth.getCachedDeviceData(agentCode);
+
+    if (agentData == null) {
+      throw Exception('Dados de cache inválidos');
+    }
+
+    // Store in shared preferences for session
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(agentData));
+    if (deviceData != null) {
+      await prefs.setString(_deviceKey, jsonEncode(deviceData));
+    }
+    await prefs.setString(_agentCodeKey, agentCode);
+    await prefs.setString(
+      _tokenKey,
+      'offline_session_${DateTime.now().millisecondsSinceEpoch}',
+    );
+    await prefs.setBool(_offlineModeKey, true); // Mark as offline mode
+
+    return {'user': agentData, 'device': deviceData, 'offline': true};
+  }
+
+  /// Smart login: tries online first, falls back to offline if available.
+  Future<Map<String, dynamic>> smartLogin(
+    String agentCode,
+    String pin,
+    String deviceSerial,
+  ) async {
+    // First, try online login
+    try {
+      final isOnline = await _connectivity.checkConnectivity();
+      if (isOnline) {
+        return await posLogin(agentCode, pin, deviceSerial);
+      }
+    } catch (e) {
+      // Online login failed, try offline
+    }
+
+    // Backend unavailable, try offline login
+    if (await _offlineAuth.hasCachedCredentials(agentCode)) {
+      return await offlineLogin(agentCode, pin);
+    }
+
+    // No cached credentials available
+    throw Exception(
+      'Servidor indisponível e sem credenciais offline. Conecte-se online pelo menos uma vez.',
+    );
+  }
+
+  /// Check if currently in offline mode.
+  Future<bool> isOfflineMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_offlineModeKey) ?? false;
+  }
+
+  /// Get cached credentials expiry time.
+  Future<DateTime?> getOfflineCacheExpiry(String agentCode) async {
+    return _offlineAuth.getCacheExpiryTime(agentCode);
+  }
+
+  /// Get last sync time.
+  Future<DateTime?> getLastSyncTime() async {
+    return _offlineAuth.getLastSyncTime();
   }
 
   /// Make authenticated HTTP request with token header.

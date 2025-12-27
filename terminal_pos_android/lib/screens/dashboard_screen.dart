@@ -4,6 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/auth_service.dart';
 import '../services/inactivity_service.dart';
+import '../services/sync_service.dart';
+import '../services/connectivity_service.dart'; // Added
 import 'login_screen.dart';
 import 'payment_screen.dart';
 import 'transaction_history_screen.dart';
@@ -12,7 +14,9 @@ import 'merchant_registration_screen.dart';
 import 'merchant_search_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final bool isOfflineMode;
+
+  const DashboardScreen({super.key, this.isOfflineMode = false});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -20,26 +24,82 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final AuthService _authService = AuthService();
+  final ConnectivityService _connectivityService = ConnectivityService();
+  final SyncService _syncService = SyncService(); // Restored
+
+  // State
   Map<String, dynamic>? _userData;
   Map<String, dynamic>? _deviceData;
   bool _isLoading = true;
+  late bool _isLoginModeOffline; // True if user explicitly logged in offline
+  String? _syncStatus;
+
+  // Network state (dynamic, real-time)
+  bool _isNetworkDown = false;
+
+  // Unified offline state: True if user logged in offline OR network is down
+  bool get _effectivelyOffline => _isLoginModeOffline || _isNetworkDown;
+
+  // Banner state
+  bool _showConnectionBanner = false;
+  String _connectionBannerMessage = '';
+  bool _isReconnectionBanner = false; // Green banner when reconnecting
 
   @override
   void initState() {
     super.initState();
+    _isLoginModeOffline = widget.isOfflineMode; // User choice mode
+
+    // Start network monitoring
+    _connectivityService.startMonitoring();
+    _connectivityService.connectionStream.listen(_handleConnectionChange);
+
     _loadUserData();
+
     // Start inactivity monitoring after login
     WidgetsBinding.instance.addPostFrameCallback((_) {
       InactivityService.startMonitoring(context);
     });
   }
 
+  void _handleConnectionChange(bool isConnected) {
+    if (!mounted) return;
+
+    final wasOffline = _isNetworkDown;
+
+    if (isConnected && wasOffline) {
+      // CAME ONLINE (was offline before)
+      setState(() {
+        _isNetworkDown = false;
+        _connectionBannerMessage = "Conexão restaurada. Sincronizando...";
+        _isReconnectionBanner = true;
+        _showConnectionBanner = true;
+      });
+
+      // Hide green reconnection banner after 4 seconds
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _showConnectionBanner = false);
+      });
+
+      // Auto-trigger sync
+      _syncMerchantsInBackground();
+    } else if (!isConnected && !wasOffline) {
+      // WENT OFFLINE (was online before)
+      setState(() {
+        _isNetworkDown = true;
+        _connectionBannerMessage = "Sem conexão com servidor";
+        _isReconnectionBanner = false;
+        _showConnectionBanner = true;
+      });
+    }
+  }
+
   @override
   void dispose() {
     InactivityService.stopMonitoring();
+    _connectivityService.stopMonitoring();
     super.dispose();
   }
-
 
   Future<void> _loadUserData() async {
     final userData = await _authService.getUserData();
@@ -49,6 +109,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _deviceData = deviceData;
       _isLoading = false;
     });
+
+    // Check initial connectivity
+    final isConnected = await _connectivityService.checkConnectivity();
+    if (!isConnected && !_isLoginModeOffline) {
+      // If we logged in online but net is down now
+      _handleConnectionChange(false);
+    }
+
+    // Sync merchants in background if online (and not forced offline)
+    if (!_isLoginModeOffline && isConnected) {
+      _syncMerchantsInBackground();
+    }
+  }
+
+  Future<void> _syncMerchantsInBackground() async {
+    setState(() => _syncStatus = 'Sincronizando dados...');
+
+    // ========== STEP 1: UPLOAD OFFLINE DATA FIRST ==========
+    // This must happen BEFORE downloading server data to prevent cache overwrite
+
+    // Sync offline merchants first (to get real IDs for payments)
+    final offlineMerchantResult = await _syncService
+        .syncOfflineMerchantsWithIdMapping();
+
+    if (mounted &&
+        offlineMerchantResult.success &&
+        (offlineMerchantResult.offlineMerchantCount ?? 0) > 0) {
+      setState(() {
+        _syncStatus =
+            'Sincronizado ${offlineMerchantResult.offlineMerchantCount} comerciantes offline';
+      });
+      await Future.delayed(const Duration(milliseconds: 1000));
+    }
+
+    // Then sync offline payments (they now have real merchant IDs)
+    final offlinePaymentResult = await _syncService.syncOfflinePayments();
+
+    if (mounted &&
+        offlinePaymentResult.success &&
+        (offlinePaymentResult.offlinePaymentCount ?? 0) > 0) {
+      setState(() {
+        _syncStatus =
+            'Sincronizado ${offlinePaymentResult.offlinePaymentCount} pagamentos offline';
+      });
+      await Future.delayed(const Duration(milliseconds: 1000));
+    }
+
+    // ========== STEP 2: DOWNLOAD SERVER DATA ==========
+    // Now safe to download - won't overwrite unsent offline data
+
+    // Sync merchants from server
+    final merchantResult = await _syncService.syncMerchants();
+
+    if (mounted && merchantResult.success) {
+      setState(() {
+        _syncStatus =
+            'Sincronizado: ${merchantResult.merchantCount} comerciantes';
+      });
+    }
+
+    // Sync transactions from server
+    final txResult = await _syncService.syncTransactions();
+
+    if (mounted) {
+      setState(() {
+        if (txResult.success) {
+          _syncStatus =
+              'Sincronizado: ${merchantResult.merchantCount ?? 0} comerciantes, ${txResult.transactionCount ?? 0} transações';
+        }
+      });
+
+      // Clear status after 3 seconds
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _syncStatus = null);
+      });
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -95,7 +231,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF059669),
+        // Dynamic color: Amber 800 when offline, Emerald 600 when online
+        backgroundColor: _effectivelyOffline
+            ? const Color(0xFF92400E) // Amber 800
+            : const Color(0xFF059669),
         foregroundColor: Colors.white,
         title: Text(
           'Paysafe POS',
@@ -114,6 +253,127 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // UNIFIED CONNECTION STATUS BANNER
+            // Shows: amber offline card OR green reconnection toast OR nothing
+            if (_showConnectionBanner && _isReconnectionBanner)
+              // Green reconnection banner (temporary)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981), // Emerald 500
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(LucideIcons.wifi, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      _connectionBannerMessage,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().slideY(begin: -1, end: 0, duration: 300.ms),
+
+            // Amber offline card (persistent when offline)
+            if (_effectivelyOffline && !_isReconnectionBanner)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.wifiOff,
+                      color: Colors.amber.shade800,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Modo Offline',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                          Text(
+                            _isLoginModeOffline
+                                ? 'Sessão offline. Dados serão sincronizados quando online.'
+                                : 'Sem conexão. Usando dados em cache.',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.amber.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn().slideY(begin: -0.2),
+            // Sync Status Banner
+            if (_syncStatus != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: _syncStatus!.contains('Sincronizando')
+                          ? CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.blue.shade600,
+                            )
+                          : Icon(
+                              LucideIcons.checkCircle,
+                              color: Colors.green.shade600,
+                              size: 16,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _syncStatus!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(),
             // Welcome Card
             Container(
               width: double.infinity,
@@ -318,7 +578,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     .animate()
                     .fadeIn(delay: 500.ms)
                     .scale(begin: const Offset(0.8, 0.8)),
-                
+
                 _ActionCard(
                       icon: LucideIcons.search,
                       title: 'Buscar',
@@ -338,14 +598,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _ActionCard(
                       icon: LucideIcons.keyRound,
                       title: 'Alterar PIN',
-                      subtitle: 'Redefinir senha',
+                      subtitle: _effectivelyOffline
+                          ? 'Indisponível offline'
+                          : 'Redefinir senha',
                       color: const Color(0xFFF59E0B),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PinResetScreen(),
-                        ),
-                      ),
+                      isDisabled: _effectivelyOffline,
+                      onTap: _effectivelyOffline
+                          ? () => ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Alteração de PIN requer conexão com o servidor',
+                                ),
+                                backgroundColor: Colors.orange,
+                              ),
+                            )
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PinResetScreen(),
+                              ),
+                            ),
                     )
                     .animate()
                     .fadeIn(delay: 600.ms)
@@ -365,6 +637,7 @@ class _ActionCard extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
+  final bool isDisabled;
 
   const _ActionCard({
     required this.icon,
@@ -372,10 +645,13 @@ class _ActionCard extends StatelessWidget {
     required this.subtitle,
     required this.color,
     required this.onTap,
+    this.isDisabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = isDisabled ? Colors.grey : color;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -384,7 +660,7 @@ class _ActionCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDisabled ? Colors.grey.shade100 : Colors.white,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
@@ -398,13 +674,40 @@ class _ActionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 24),
+              // Icon with optional lock overlay
+              Stack(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: effectiveColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: effectiveColor, size: 24),
+                  ),
+                  // Lock badge inside icon container
+                  if (isDisabled)
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.grey.shade100,
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          LucideIcons.lock,
+                          size: 10,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const Spacer(),
               Text(
@@ -412,13 +715,16 @@ class _ActionCard extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                  color: isDisabled ? Colors.grey : Colors.grey[800],
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[500]),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDisabled ? Colors.grey.shade400 : Colors.grey[500],
+                ),
               ),
             ],
           ),

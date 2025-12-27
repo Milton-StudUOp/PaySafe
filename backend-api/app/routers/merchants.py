@@ -99,12 +99,7 @@ async def create_merchant(
             if field in data and data[field] == "":
                 data[field] = None
 
-        # Check Duplicates
-        if data.get("phone_number"):
-            existing_phone = await db.execute(select(MerchantModel).where(MerchantModel.phone_number == data["phone_number"]).limit(1))
-            if existing_phone.scalars().first():
-                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um comerciante com este número de telefone.")
-
+        # Check Duplicates - Only NFC UID is unique (same person can have multiple shops)
         if data.get("nfc_uid"):
             existing_nfc = await db.execute(select(MerchantModel).where(MerchantModel.nfc_uid == data["nfc_uid"]).limit(1))
             if existing_nfc.scalars().first():

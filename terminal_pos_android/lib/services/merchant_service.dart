@@ -21,6 +21,20 @@ class MerchantService {
     }
   }
 
+  /// Get all merchants from a specific market (for offline sync).
+  Future<List<Map<String, dynamic>>> getMerchantsByMarket(int marketId) async {
+    final response = await _authService.authenticatedGet(
+      '/merchants/?market_id=$marketId&limit=500',
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('Erro ao buscar comerciantes do mercado');
+    }
+  }
+
   /// Get merchant by NFC UID.
   Future<Map<String, dynamic>?> getMerchantByNfc(String nfcUid) async {
     try {
@@ -93,10 +107,12 @@ class MerchantService {
     String? nfcUid,
     String? stallNumber,
     String? idNumber,
+    String businessType = 'AMBULANTE',
   }) async {
     final body = {
       'full_name': fullName,
       'market_id': marketId,
+      'business_type': businessType,
       if (phoneNumber != null) 'phone_number': phoneNumber,
       if (mpesaNumber != null) 'mpesa_number': mpesaNumber,
       if (emolaNumber != null) 'emola_number': emolaNumber,
@@ -120,7 +136,13 @@ class MerchantService {
   Future<Map<String, dynamic>> createMerchantFromData(
     Map<String, dynamic> data,
   ) async {
-    final response = await _authService.authenticatedPost('/merchants/', data);
+    // Ensure business_type is set if not present
+    final body = Map<String, dynamic>.from(data);
+    if (!body.containsKey('business_type')) {
+      body['business_type'] = 'AMBULANTE';
+    }
+
+    final response = await _authService.authenticatedPost('/merchants/', body);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);

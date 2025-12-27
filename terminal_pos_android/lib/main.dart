@@ -6,7 +6,8 @@ import 'services/inactivity_service.dart';
 
 void main() {
   // Disable runtime font fetching for offline operation
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Allow runtime font fetching to fix missing asset errors
+  GoogleFonts.config.allowRuntimeFetching = true;
   runApp(const MyApp());
 }
 
@@ -28,8 +29,24 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
         // Using system default text theme for offline compatibility
-        textTheme: Typography.material2021().black.apply(
-          fontFamily: 'Roboto', // Android system font
+        textTheme: Typography.material2021().black
+            .apply(
+              fontFamily: 'Roboto', // Android system font
+            )
+            .copyWith(
+              // Reduce global font sizes to prevent overflow
+              bodyLarge: const TextStyle(fontSize: 14), // Was ~16
+              bodyMedium: const TextStyle(fontSize: 13), // Was ~14
+              titleMedium: const TextStyle(fontSize: 14), // Was ~16
+              titleSmall: const TextStyle(fontSize: 13), // Was ~14
+              labelLarge: const TextStyle(fontSize: 13), // Button text
+            ),
+        // Reduce input field height and text size
+        inputDecorationTheme: const InputDecorationTheme(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          labelStyle: TextStyle(fontSize: 13),
+          hintStyle: TextStyle(fontSize: 13),
         ),
         scaffoldBackgroundColor: Colors.white,
       ),

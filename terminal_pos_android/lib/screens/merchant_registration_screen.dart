@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/market_service.dart';
+import '../services/market_cache_service.dart';
 import '../services/merchant_service.dart';
+import '../services/merchant_cache_service.dart';
 import '../services/nfc_scan_service.dart';
+import '../services/auth_service.dart';
+import '../services/offline_merchant_queue_service.dart';
 import '../utils/ui_utils.dart';
 
 class MerchantRegistrationScreen extends StatefulWidget {
@@ -20,7 +24,11 @@ class _MerchantRegistrationScreenState
 
   // Services
   final _marketService = MarketService();
+  final _marketCache = MarketCacheService();
   final _merchantService = MerchantService();
+  final _merchantCache = MerchantCacheService();
+  final _authService = AuthService();
+  final _offlineQueue = OfflineMerchantQueueService();
 
   // Controllers
   final _fullNameController = TextEditingController();
@@ -44,6 +52,7 @@ class _MerchantRegistrationScreenState
 
   // State Variables
   bool _isLoading = false;
+  bool _isOffline = false;
   List<Map<String, dynamic>> _markets = [];
   Map<String, dynamic>? _selectedMarket;
   String _merchantType = "FIXO"; // Default
@@ -52,27 +61,57 @@ class _MerchantRegistrationScreenState
   @override
   void initState() {
     super.initState();
+    _checkOfflineMode();
     _loadMarkets();
   }
 
+  Future<void> _checkOfflineMode() async {
+    final isOffline = await _authService.isOfflineMode();
+    if (mounted) {
+      setState(() => _isOffline = isOffline);
+    }
+  }
+
   Future<void> _loadMarkets() async {
+    // CACHE-FIRST: Always try to load from cache first for instant display
+    final cachedMarkets = await _marketCache.getCachedMarkets();
+    if (cachedMarkets.isNotEmpty) {
+      setState(() {
+        _markets = cachedMarkets;
+      });
+    }
+
+    // If offline mode, don't try API
+    if (_isOffline) return;
+
+    // Try to refresh from API silently (no error shown if cache exists)
     try {
       final markets = await _marketService.getApprovedMarkets();
-      setState(() {
-        _markets = markets;
-        if (markets.isEmpty && mounted) {
-          UIUtils.showErrorSnackBar(
-            context,
-            "Nenhum mercado disponível na sua jurisdição. Contacte o administrador.",
-          );
-        }
-      });
-    } catch (e) {
-      if (mounted) {
+      if (mounted && markets.isNotEmpty) {
+        setState(() {
+          _markets = markets;
+        });
+        // Update cache for next time
+        await _marketCache.cacheMarkets(markets);
+      } else if (markets.isEmpty && _markets.isEmpty && mounted) {
+        // Only show error if both API returned empty AND cache is empty
         UIUtils.showErrorSnackBar(
           context,
-          "Erro ao carregar mercados: ${e.toString().replaceAll('Exception: ', '')}",
+          "Nenhum mercado disponível na sua jurisdição. Contacte o administrador.",
         );
+      }
+    } catch (e) {
+      // API failed - if we have cached markets, continue silently (no error)
+      if (_markets.isEmpty && mounted) {
+        // Only show error if we have NO cached data at all
+        UIUtils.showErrorSnackBar(
+          context,
+          "Sem conexão. Conecte-se para carregar mercados.",
+        );
+      }
+      // Mark as offline if API fails
+      if (mounted) {
+        setState(() => _isOffline = true);
       }
     }
   }
@@ -98,6 +137,79 @@ class _MerchantRegistrationScreenState
     });
 
     try {
+      // Get agent data for offline queue
+      final userData = await _authService.getUserData();
+
+      // DUPLICATE CHECK: Only NFC - other fields can repeat for multiple shops
+      final duplicateError = await _merchantCache.checkDuplicates(
+        nfcUid: _nfcController.text.trim(),
+      );
+
+      if (duplicateError != null) {
+        if (mounted) {
+          UIUtils.showErrorSnackBar(context, duplicateError);
+        }
+        return;
+      }
+
+      // OFFLINE MODE: Queue registration locally
+      if (_isOffline) {
+        final tempId = await _offlineQueue.queueMerchantRegistration(
+          fullName: _fullNameController.text.trim(),
+          phoneNumber: _phoneController.text.trim(),
+          marketId: _selectedMarket!['id'],
+          nfcUid: _nfcController.text.trim().isNotEmpty
+              ? _nfcController.text.trim()
+              : null,
+          mpesaNumber: _mpesaController.text.trim().isNotEmpty
+              ? _mpesaController.text.trim()
+              : null,
+          emolaNumber: _emolaController.text.trim().isNotEmpty
+              ? _emolaController.text.trim()
+              : null,
+          mkeshNumber: _mkeshController.text.trim().isNotEmpty
+              ? _mkeshController.text.trim()
+              : null,
+          agentId: userData?['id'] ?? 0,
+          agentName: userData?['name'] ?? 'Agente',
+        );
+
+        // ADD TO CACHE IMMEDIATELY: Make merchant available for search and payments
+        await _merchantCache.addOfflineMerchant({
+          'id': tempId, // Temporary ID
+          'full_name': _fullNameController.text.trim(),
+          'phone_number': _phoneController.text.trim(),
+          'market_id': _selectedMarket!['id'],
+          'nfc_uid': _nfcController.text.trim().isNotEmpty
+              ? _nfcController.text.trim()
+              : null,
+          'mpesa_number': _mpesaController.text.trim().isNotEmpty
+              ? _mpesaController.text.trim()
+              : null,
+          'emola_number': _emolaController.text.trim().isNotEmpty
+              ? _emolaController.text.trim()
+              : null,
+          'mkesh_number': _mkeshController.text.trim().isNotEmpty
+              ? _mkeshController.text.trim()
+              : null,
+          'is_offline_pending': true, // Flag for UI indication
+        });
+
+        if (mounted) {
+          UIUtils.showSuccessDialog(
+            context,
+            title: "Comerciante Registrado!",
+            message:
+                "Registro salvo offline.\nSerá sincronizado quando conectar ao servidor.",
+            onDismiss: () {
+              Navigator.of(context).pop();
+            },
+          );
+        }
+        return;
+      }
+
+      // ONLINE MODE: Send to API directly
       final data = {
         "full_name": _fullNameController.text.trim(),
         "merchant_type": _merchantType,
@@ -117,7 +229,7 @@ class _MerchantRegistrationScreenState
             ? _mkeshController.text.trim()
             : null,
 
-        // KYC - Only sent if FIXO (backend ignores or treats as null usually, but good to clean)
+        // KYC - Only sent if FIXO
         "phone_number":
             _merchantType == "FIXO" && _phoneController.text.isNotEmpty
             ? _phoneController.text.trim()
@@ -134,7 +246,6 @@ class _MerchantRegistrationScreenState
             _merchantType == "FIXO" && _idNumberController.text.isNotEmpty
             ? _idNumberController.text.trim()
             : null,
-        // For date, assuming text input YYYY-MM-DD for simpler POS entry or add date picker
         "id_document_expiry":
             _merchantType == "FIXO" && _idExpiryController.text.isNotEmpty
             ? _idExpiryController.text.trim()
@@ -149,7 +260,7 @@ class _MerchantRegistrationScreenState
           title: "Sucesso",
           message: "Comerciante cadastrado com sucesso!",
           onDismiss: () {
-            Navigator.of(context).pop(); // Close Screen
+            Navigator.of(context).pop();
           },
         );
       }
@@ -251,20 +362,32 @@ class _MerchantRegistrationScreenState
 
                     const SizedBox(height: 16),
                     // Market Dropdown
-                    DropdownButtonFormField<Map<String, dynamic>>(
-                      value: _selectedMarket,
+                    DropdownButtonFormField<int>(
+                      value: _selectedMarket?['id'],
                       isExpanded: true,
                       decoration: _inputDecoration("Mercado / Local *"),
                       hint: const Text("Selecione o Mercado"),
                       items: _markets
                           .map(
-                            (m) => DropdownMenuItem(
-                              value: m,
-                              child: Text("${m['name']} (${m['province']})"),
+                            (m) => DropdownMenuItem<int>(
+                              value: m['id'],
+                              child: Text(
+                                m['province'] != null
+                                    ? "${m['name']} (${m['province']})"
+                                    : m['name'] ?? 'Mercado',
+                              ),
                             ),
                           )
                           .toList(),
-                      onChanged: (v) => setState(() => _selectedMarket = v),
+                      onChanged: (id) {
+                        if (id != null) {
+                          final market = _markets.firstWhere(
+                            (m) => m['id'] == id,
+                            orElse: () => {'id': id, 'name': 'Mercado'},
+                          );
+                          setState(() => _selectedMarket = market);
+                        }
+                      },
                       validator: (v) =>
                           v == null ? "Selecione o mercado" : null,
                     ),

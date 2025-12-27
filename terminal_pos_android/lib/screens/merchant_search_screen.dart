@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'dart:async';
 import '../services/merchant_service.dart';
+import '../services/merchant_cache_service.dart';
+import '../services/connectivity_service.dart';
 import '../utils/ui_utils.dart';
 import 'payment_screen.dart';
 import 'edit_merchant_screen.dart'; // Will create this next
@@ -17,19 +20,35 @@ class MerchantSearchScreen extends StatefulWidget {
 class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
   final _searchController = TextEditingController();
   final _merchantService = MerchantService();
-  // final _marketService = MarketService(); // Removed unused service
+  final _merchantCache = MerchantCacheService();
+  final _connectivityService = ConnectivityService();
 
   List<dynamic> _searchResults = [];
   bool _isLoading = false;
+  bool _isOnline = true;
   String? _errorMessage;
-
-  // Debounce helper could be added, but manual search button is fine for POS
+  StreamSubscription<bool>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
-    // Optional: Start NFC immediately if desired, but user might want to type first.
-    // Let's add an explicit FAB or button for NFC to avoid conflicts typing.
+    _checkConnectivity();
+    _connectivitySubscription = _connectivityService.connectionStream.listen((
+      isConnected,
+    ) {
+      if (mounted) setState(() => _isOnline = isConnected);
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkConnectivity() async {
+    final isConnected = await _connectivityService.checkConnectivity();
+    if (mounted) setState(() => _isOnline = isConnected);
   }
 
   Future<void> _performSearch() async {
@@ -43,7 +62,76 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
     });
 
     try {
-      final results = await _merchantService.searchMerchants(query);
+      List<Map<String, dynamic>> results = [];
+
+      // Detect query type
+      final isHexUid = RegExp(r'^[0-9A-Fa-f]{8,}$').hasMatch(query);
+      final isPhoneNumber = RegExp(
+        r'^8[2-7][0-9]{7}$',
+      ).hasMatch(query.replaceAll(RegExp(r'\D'), ''));
+
+      if (isHexUid) {
+        // Looks like NFC UID - search by NFC (cache first)
+        final merchant = await _merchantCache.getMerchantByNfc(
+          query.toUpperCase(),
+        );
+        if (merchant != null) {
+          results = [merchant];
+        } else if (_isOnline) {
+          // Try API only if online
+          try {
+            final apiMerchant = await _merchantService.getMerchantByNfc(
+              query.toUpperCase(),
+            );
+            if (apiMerchant != null) results = [apiMerchant];
+          } catch (e) {
+            debugPrint('API NFC lookup failed: $e');
+          }
+        }
+      } else if (isPhoneNumber) {
+        // Looks like phone number - search by phone
+        final normalizedPhone = query.replaceAll(RegExp(r'\D'), '');
+        final merchant = await _merchantCache.getMerchantByPhone(
+          normalizedPhone,
+        );
+        if (merchant != null) {
+          results = [merchant];
+        } else if (_isOnline) {
+          // Try API search only if online
+          try {
+            results = await _merchantService.searchMerchants(query);
+          } catch (e) {
+            debugPrint('API phone search failed: $e');
+          }
+        }
+      } else {
+        // General search - try cache first
+        results = await _merchantCache.searchMerchantsByName(query);
+
+        // If not found by name, try as NFC UID (case-insensitive)
+        if (results.isEmpty) {
+          final merchant = await _merchantCache.getMerchantByNfc(query);
+          if (merchant != null) {
+            results = [merchant];
+          }
+        }
+
+        // Still empty? Try API only if online
+        if (results.isEmpty && _isOnline) {
+          try {
+            results = await _merchantService.searchMerchants(query);
+          } catch (e) {
+            debugPrint('API search failed: $e');
+          }
+        }
+      }
+
+      if (results.isEmpty) {
+        setState(() {
+          _errorMessage = 'Nenhum comerciante encontrado';
+        });
+      }
+
       setState(() {
         _searchResults = results;
       });
@@ -89,12 +177,14 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
           }
 
           if (uid != null) {
-            // Found UID, close dialog and search
+            // Found UID, close dialog and look up merchant by NFC
             await NfcManager.instance.stopSession();
             if (mounted) {
               Navigator.pop(context); // Close dialog
               _searchController.text = uid;
-              _performSearch();
+
+              // Look up merchant by NFC UID (cache first, then API)
+              await _findMerchantByNfc(uid);
             }
           }
         } catch (e) {
@@ -103,6 +193,51 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
         }
       },
     );
+  }
+
+  /// Find merchant by NFC UID using cache-first approach.
+  Future<void> _findMerchantByNfc(String nfcUid) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _searchResults = [];
+    });
+
+    try {
+      final merchantCache = MerchantCacheService();
+
+      // Try cache first
+      Map<String, dynamic>? merchant = await merchantCache.getMerchantByNfc(
+        nfcUid,
+      );
+
+      // If not in cache, try API
+      if (merchant == null) {
+        try {
+          merchant = await _merchantService.getMerchantByNfc(nfcUid);
+        } catch (e) {
+          debugPrint('API NFC lookup failed: $e');
+        }
+      }
+
+      if (merchant != null) {
+        // Found merchant - show in results and open action dialog
+        setState(() {
+          _searchResults = [merchant!];
+        });
+        _onMerchantSelected(merchant);
+      } else {
+        setState(() {
+          _errorMessage = 'Cartão não identificado';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _showNfcDialog() {
@@ -275,11 +410,18 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
     );
   }
 
-  void _goToEdit(Map<String, dynamic> merchant) {
-    Navigator.push(
+  Future<void> _goToEdit(Map<String, dynamic> merchant) async {
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => EditMerchantScreen(merchant: merchant)),
     );
+
+    // If update occurred, refresh current search results
+    if (result == true && mounted) {
+      if (_searchController.text.isNotEmpty) {
+        _performSearch();
+      }
+    }
   }
 
   @override

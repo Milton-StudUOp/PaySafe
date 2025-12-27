@@ -4,6 +4,7 @@ from sqlalchemy import select
 from typing import Optional
 from decimal import Decimal
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 from app.database import get_db
 from app.routers.auth import get_current_user
@@ -25,6 +26,8 @@ class PaymentRequest(BaseModel):
     observation: str
     payment_method: PaymentMethod = Field(default=PaymentMethod.MPESA)
     nfc_uid: Optional[str] = None
+    # For offline payments: preserve original transaction date
+    offline_created_at: Optional[str] = Field(default=None, description="Original ISO datetime for offline payments")
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def initiate_payment(
@@ -119,6 +122,16 @@ async def initiate_payment(
     # 5. Call Payment Service
     service = PaymentService()
     
+    # Parse offline created_at if provided
+    tx_created_at = None
+    if payment.offline_created_at:
+        try:
+            tx_created_at = datetime.fromisoformat(payment.offline_created_at.replace('Z', '+00:00'))
+            logger.info(f"Using offline transaction date: {tx_created_at}")
+        except ValueError:
+            logger.warning(f"Invalid offline_created_at format: {payment.offline_created_at}")
+            tx_created_at = None
+    
     # Create provisional transaction record (PENDING)
     transaction = Transaction(
         transaction_uuid=tx_uuid,
@@ -134,8 +147,11 @@ async def initiate_payment(
         mpesa_reference=None, # Filled later
         province=market.province, # Snapshot location
         district=market.district,
-        request_payload={"msisdn": payment.mpesa_number, "obs": payment.observation, "method": payment.payment_method}
+        request_payload={"msisdn": payment.mpesa_number, "obs": payment.observation, "method": payment.payment_method, "is_offline_sync": payment.offline_created_at is not None}
     )
+    # Override created_at if this is an offline sync
+    if tx_created_at:
+        transaction.created_at = tx_created_at
     db.add(transaction)
     await db.commit() # Commit to get ID and ensure ID is reserved
     

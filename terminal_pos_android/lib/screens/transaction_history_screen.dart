@@ -5,7 +5,12 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../services/transaction_service.dart';
+import '../services/transaction_cache_service.dart';
+import '../services/offline_payment_queue_service.dart';
+import '../services/auth_service.dart';
 import '../services/market_service.dart';
+import '../services/connectivity_service.dart'; // Added
+import 'dart:async';
 import 'receipt_screen.dart'; // To reprint logic
 
 class TransactionHistoryScreen extends StatefulWidget {
@@ -18,12 +23,18 @@ class TransactionHistoryScreen extends StatefulWidget {
 
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   final _transactionService = TransactionService();
+  final _transactionCache = TransactionCacheService();
+  final _offlineQueue = OfflinePaymentQueueService();
+  final _authService = AuthService();
+  final _connectivityService = ConnectivityService(); // Added
 
   // State
   bool _isLoading = true;
+  bool _isOffline = false;
   List<dynamic> _transactions = [];
   double _filteredTotal = 0.0;
   int _filteredCount = 0;
+  StreamSubscription<bool>? _connectivitySubscription; // Added
 
   DateTime _selectedDate = DateTime.now();
   final _currencyFormat = NumberFormat.currency(locale: 'pt_MZ', symbol: 'MT');
@@ -32,6 +43,32 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _checkOfflineAndFetch();
+    // Listen to real-time connectivity changes
+    _connectivitySubscription = _connectivityService.connectionStream.listen((
+      isConnected,
+    ) {
+      if (mounted) {
+        final wasOffline = _isOffline;
+        setState(() => _isOffline = !isConnected);
+        // Refresh data if we just came online
+        if (wasOffline && isConnected) {
+          _fetchData();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkOfflineAndFetch() async {
+    final isOfflineLogin = await _authService.isOfflineMode();
+    final isConnected = await _connectivityService.checkConnectivity();
+    _isOffline = isOfflineLogin || !isConnected;
     _fetchData();
   }
 
@@ -39,11 +76,68 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final txs = await _transactionService.getTransactions(
-        startDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
-        endDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
-        limit: 100,
-      );
+      List<Map<String, dynamic>> txs = [];
+
+      if (_isOffline) {
+        // Offline: use cached transactions
+        txs = await _transactionCache.getTransactionsByDateRange(
+          startDate: DateTime(
+            _selectedDate.year,
+            _selectedDate.month,
+            _selectedDate.day,
+          ),
+          endDate: DateTime(
+            _selectedDate.year,
+            _selectedDate.month,
+            _selectedDate.day,
+            23,
+            59,
+            59,
+          ),
+        );
+      } else {
+        // Online: try API first, fallback to cache
+        try {
+          txs = await _transactionService.getTransactions(
+            startDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
+            endDate: DateFormat('yyyy-MM-dd').format(_selectedDate),
+            limit: 100,
+          );
+        } catch (e) {
+          // API failed, try cache
+          debugPrint('API failed, using cache: $e');
+          txs = await _transactionCache.getTransactionsByDateRange(
+            startDate: DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day,
+            ),
+            endDate: DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day,
+              23,
+              59,
+              59,
+            ),
+          );
+        }
+      }
+
+      // Add pending offline payments for today
+      final today = DateTime.now();
+      if (_selectedDate.year == today.year &&
+          _selectedDate.month == today.month &&
+          _selectedDate.day == today.day) {
+        final pendingPayments = await _offlineQueue.getPendingPayments();
+        for (final payment in pendingPayments) {
+          // Mark as pending sync for UI display
+          final tx = Map<String, dynamic>.from(payment);
+          tx['is_pending_sync'] = true;
+          tx['status'] = 'SUCESSO'; // Show as success
+          txs.insert(0, tx); // Add to top of list
+        }
+      }
 
       // Calculate stats locally from filtered transactions
       double totalFiltered = 0.0;
@@ -189,11 +283,14 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           double.tryParse(tx['amount'].toString()) ?? 0.0;
                       final method = tx['payment_method'] ?? "DINHEIRO";
                       final status = tx['status'] ?? "PENDING";
+                      final isPendingSync = tx['is_pending_sync'] == true;
                       final date =
                           DateTime.tryParse(tx['created_at'] ?? "") ??
                           DateTime.now();
                       final merchantName =
-                          tx['merchant']?['full_name'] ?? "Comerciante";
+                          tx['merchant_name'] ??
+                          tx['merchant']?['full_name'] ??
+                          "Comerciante";
 
                       return Card(
                         elevation: 0,
@@ -236,7 +333,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                   fontSize: 16,
                                 ),
                               ),
-                              _buildStatusBadge(status),
+                              _buildStatusBadge(
+                                status,
+                                isPendingSync: isPendingSync,
+                              ),
                             ],
                           ),
                           onTap: () async {
@@ -336,12 +436,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ),
         ],
@@ -349,7 +453,34 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     );
   }
 
-  Widget _buildStatusBadge(String status) {
+  Widget _buildStatusBadge(String status, {bool isPendingSync = false}) {
+    if (isPendingSync) {
+      // Pending sync: show special indicator
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.amber.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.cloudOff, size: 10, color: Colors.amber.shade700),
+            const SizedBox(width: 4),
+            Text(
+              'Aguardando Sync',
+              style: GoogleFonts.inter(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: Colors.amber.shade700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     Color color;
     switch (status) {
       case 'SUCESSO':
@@ -364,12 +495,19 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       default:
         color = Colors.grey;
     }
-    return Text(
-      status,
-      style: GoogleFonts.inter(
-        fontSize: 10,
-        fontWeight: FontWeight.bold,
-        color: color,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
       ),
     );
   }
