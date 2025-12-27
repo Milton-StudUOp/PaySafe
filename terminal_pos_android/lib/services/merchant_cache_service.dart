@@ -333,14 +333,16 @@ class MerchantCacheService {
         };
         found = true;
 
-        // Update NFC lookup if NFC changed
-        final newNfc = updates['nfc_uid']?.toString();
-        if (newNfc != null && newNfc.isNotEmpty) {
-          final normalizedUid = newNfc.toUpperCase().trim();
+        // ALWAYS update NFC lookup cache if merchant has NFC (new or existing)
+        // This ensures searches by NFC return the latest data, not stale cache
+        final merchantNfc = merchants[i]['nfc_uid']?.toString();
+        if (merchantNfc != null && merchantNfc.isNotEmpty) {
+          final normalizedUid = merchantNfc.toUpperCase().trim();
           await prefs.setString(
             '$_cacheKeyPrefix$normalizedUid',
             jsonEncode(merchants[i]),
           );
+          debugPrint('✅ Updated NFC lookup cache for: $normalizedUid');
         }
         break;
       }
