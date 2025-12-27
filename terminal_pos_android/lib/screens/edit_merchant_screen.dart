@@ -261,6 +261,10 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
         final merchantId = widget.merchant['id'];
         final merchantName = widget.merchant['full_name'] ?? 'Comerciante';
 
+        debugPrint(
+          '💾 OFFLINE SAVE: merchantId=$merchantId, new_name=${data['full_name']}',
+        );
+
         await _offlineQueue.queueMerchantUpdate(
           merchantId: merchantId, // Can be int or String (temp ID)
           merchantName: merchantName,
@@ -269,7 +273,9 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
         );
 
         // IMMEDIATELY UPDATE CACHE: Changes reflect on next query
+        debugPrint('💾 Calling updateCachedMerchant...');
         await _merchantCache.updateCachedMerchant(merchantId, data);
+        debugPrint('💾 updateCachedMerchant completed');
 
         if (mounted) {
           UIUtils.showSuccessDialog(

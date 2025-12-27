@@ -96,8 +96,9 @@ class MerchantCacheService {
   /// Get all cached merchants.
   Future<List<Map<String, dynamic>>> getAllCachedMerchants() async {
     final prefs = await SharedPreferences.getInstance();
-    // Reload to ensure we read the latest persisted data (fixes stale read after write)
-    await prefs.reload();
+    // NOTE: We trust the in-memory cache of SharedPreferences.
+    // setString() updates memory immediately; reload() would read stale DISK data
+    // if the async disk write hasn't completed yet.
     final listStr = prefs.getString(_merchantListKey);
     if (listStr == null) return [];
 
