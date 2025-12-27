@@ -57,6 +57,7 @@ O **PaySafe** é uma plataforma integrada de gestão de pagamentos que digitaliz
 - ✅ **Portal Web administrativo** para gestão centralizada
 - ✅ **Integração com pagamentos móveis** (M-Pesa, e-Mola)
 - ✅ **Relatórios em tempo real** e auditoria completa
+- ✅ **Operação Offline** com sincronização automática
 
 ### Resultados Esperados
 
@@ -167,7 +168,7 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 
 | Componente | Descrição | Tecnologia |
 |------------|-----------|------------|
-| **Terminal POS** | App Android para agentes de campo | Android/Kotlin |
+| **Terminal POS** | App Android para agentes de campo | Flutter/Dart |
 | **Portal Web** | Dashboard administrativo | Next.js/React |
 | **API Backend** | Serviços e lógica de negócio | Python/FastAPI |
 | **Base de Dados** | Armazenamento seguro | MySQL |
@@ -200,7 +201,10 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **Recibos Digitais** | Geração automática com QR code | Prova de pagamento |
 | **Identificação NFC** | Leitura de cartões de comerciante | Rapidez e precisão |
 | **Múltiplos Métodos** | Dinheiro, M-Pesa, e-Mola | Conveniência |
-| **Sincronização** | Push automático quando online | Dados actualizados |
+| **Operação Offline** | Cobrança e registo sem internet | Resiliência total |
+| **Smart Network Monitor** | Detecção automática online/offline | Transparência de estado |
+| **Sincronização Automática** | Push de dados ao reconectar | Dados actualizados |
+| **Cache Inteligente** | Comerciantes/transações locais | Performance |
 
 ### 5.2 Portal Web Administrativo
 

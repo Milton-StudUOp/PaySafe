@@ -68,7 +68,7 @@ O **PaySafe Terminal POS** é uma aplicação Flutter desenvolvida para disposit
 - 📳 **Vibração** - Feedback háptico em ações
 - 🔊 **Sons** - Confirmação sonora de sucesso/erro
 
-### 🌐 Sistema Offline Avançado (NOVO)
+### 🌐 Sistema Offline Avançado 
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
