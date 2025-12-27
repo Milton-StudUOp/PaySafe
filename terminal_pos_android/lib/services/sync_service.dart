@@ -45,20 +45,52 @@ class SyncService {
       }
 
       // Fetch all merchants from the agent's jurisdiction
-      final merchants = await _merchantService.getMerchantsByMarket(marketId);
+      final serverMerchants = await _merchantService.getMerchantsByMarket(
+        marketId,
+      );
+
+      // SMART MERGE STRATEGY:
+      // Capture locally modified merchants before wiping cache.
+      // This protects against server replication lag (Read-after-Write inconsistency).
+      final localMerchants = await _merchantCache.getAllCachedMerchants();
+      final modifiedLocals = localMerchants
+          .where((m) => m['is_offline_updated'] == true)
+          .toList();
+
+      debugPrint(
+        '🛡️ Preserving ${modifiedLocals.length} locally modified merchants during sync',
+      );
+
+      // Create a map for faster merging
+      final Map<dynamic, Map<String, dynamic>> mergedMap = {};
+
+      // 1. Add Server Data first
+      for (final m in serverMerchants) {
+        mergedMap[m['id']] = m;
+      }
+
+      // 2. Overlay Local Modifications (Local wins)
+      for (final local in modifiedLocals) {
+        final id = local['id'];
+        // If it exists in server list, we overwrite it with our fresher local version.
+        // If it sends a temp ID not in server list yet, we add it.
+        mergedMap[id] = local;
+      }
+
+      final finalList = mergedMap.values.toList();
 
       // Cache them locally
       // NUCLEAR: Clear old cache first to remove orphans, BUT only after successful download
       await _merchantCache.clearCache();
       await _merchantCache.cacheMerchants(
         marketId: marketId,
-        merchants: merchants,
+        merchants: finalList,
       );
 
       return SyncResult(
         success: true,
-        message: 'Sincronizado ${merchants.length} comerciantes',
-        merchantCount: merchants.length,
+        message: 'Sincronizado ${finalList.length} comerciantes',
+        merchantCount: finalList.length,
       );
     } catch (e) {
       return SyncResult(
