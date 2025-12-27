@@ -12,10 +12,20 @@ class ConnectivityService extends ChangeNotifier {
   ConnectivityService._internal();
 
   // Stream controller for broadcasting connectivity changes
-  final _connectionInfoController = StreamController<bool>.broadcast();
+  // Made private and nullable so we can recreate if closed
+  StreamController<bool>? _connectionInfoController;
+
+  /// Get or create the stream controller (auto-recreates if closed)
+  StreamController<bool> get _controller {
+    if (_connectionInfoController == null ||
+        _connectionInfoController!.isClosed) {
+      _connectionInfoController = StreamController<bool>.broadcast();
+    }
+    return _connectionInfoController!;
+  }
 
   /// Stream of connectivity status (true = connected to server).
-  Stream<bool> get connectionStream => _connectionInfoController.stream;
+  Stream<bool> get connectionStream => _controller.stream;
 
   bool _isOnline = true;
   bool _isServerReachable = true;
@@ -76,9 +86,8 @@ class ConnectivityService extends ChangeNotifier {
     }
 
     // Always emit current state for real-time UI updates
-    if (!_connectionInfoController.isClosed) {
-      _connectionInfoController.add(isConnected);
-    }
+    // _controller getter auto-creates if closed
+    _controller.add(isConnected);
 
     // Notify ChangeNotifier listeners if status changed
     if (isConnected != previousStatus) {
