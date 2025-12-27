@@ -198,25 +198,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Sync merchants from server
     final merchantResult = await _syncService.syncMerchants();
 
-    if (mounted && merchantResult.success) {
-      setState(() {
-        _syncStatus =
-            'Sincronizado: ${merchantResult.merchantCount} comerciantes';
-      });
-    }
+    // Sync transaction history from server (CRITICAL for offline history)
+    final transactionResult = await _syncService.syncTransactions();
 
-    // Sync transactions from server
-    final txResult = await _syncService.syncTransactions();
-
-    if (mounted) {
+    if (mounted && (merchantResult.success || transactionResult.success)) {
       setState(() {
-        if (txResult.success) {
-          _syncStatus =
-              'Sincronizado: ${merchantResult.merchantCount ?? 0} comerciantes, ${txResult.transactionCount ?? 0} transações';
-        }
+        final mCount = merchantResult.merchantCount ?? 0;
+        final tCount = transactionResult.transactionCount ?? 0;
+        _syncStatus = 'Sincronizado: $mCount comerciantes, $tCount transações';
+        _isLoading = false;
       });
 
-      // Clear status after 3 seconds
+      // Clear status after delay
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted) setState(() => _syncStatus = null);
       });

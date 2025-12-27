@@ -14,7 +14,8 @@ import '../services/merchant_cache_service.dart';
 import '../services/auth_service.dart';
 import '../services/offline_payment_queue_service.dart';
 import '../services/offline_merchant_queue_service.dart';
-import '../services/connectivity_service.dart'; // Added
+import '../services/transaction_cache_service.dart'; // Added for caching online payments
+import '../services/connectivity_service.dart';
 import '../utils/ui_utils.dart';
 import 'dart:async'; // For StreamSubscription
 
@@ -28,6 +29,7 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   final _transactionService = TransactionService();
+  final _transactionCache = TransactionCacheService(); // Added
   final _authService = AuthService();
   final _offlineQueue = OfflinePaymentQueueService();
   final _connectivityService = ConnectivityService(); // Added
@@ -400,6 +402,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         final isSuccess = txStatus == 'SUCESSO';
 
         if (isSuccess) {
+          // Success: Cache transaction immediately for offline history consistency
+          await _transactionCache.addTransaction(receiptData);
+
           // Success: Show dialog THEN navigate to receipt
           UIUtils.showSuccessDialog(
             context,
