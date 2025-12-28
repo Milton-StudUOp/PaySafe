@@ -195,10 +195,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       // ============ STATUS VALIDATION ============
       // Block payments to suspended or blocked merchants
-      final merchantStatus =
-          merchant['status']?.toString().toUpperCase() ?? 'ATIVO';
+      final rawStatus = merchant['status'];
+      final merchantStatus = rawStatus?.toString().toUpperCase() ?? 'ATIVO';
+
+      debugPrint('🔍 MERCHANT STATUS CHECK:');
+      debugPrint('   - Merchant: ${merchant['full_name']}');
+      debugPrint('   - Raw status value: $rawStatus');
+      debugPrint('   - Normalized status: $merchantStatus');
 
       if (merchantStatus == 'SUSPENSO') {
+        debugPrint('   ❌ BLOCKED: Merchant is SUSPENSO');
         setState(() {
           _errorMessage =
               "⚠️ Comerciante SUSPENSO\nNão pode receber pagamentos.";
@@ -208,6 +214,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
 
       if (merchantStatus == 'BLOQUEADO') {
+        debugPrint('   ❌ BLOCKED: Merchant is BLOQUEADO');
         setState(() {
           _errorMessage =
               "🚫 Comerciante BLOQUEADO\nNão pode receber pagamentos.";
@@ -215,6 +222,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
         });
         return;
       }
+
+      debugPrint('   ✅ ALLOWED: Merchant status is OK ($merchantStatus)');
       // ============================================
 
       // Fetch market to enrich merchant data (skip if market info already cached)
@@ -1187,6 +1196,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                       ? phoneController.text.trim()
                                       : null,
                                   'merchant_type': 'AMBULANTE',
+                                  'status':
+                                      'ATIVO', // New ambulantes are always active
                                   'is_offline_pending': true,
                                 };
 
