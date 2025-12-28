@@ -23,8 +23,15 @@ class MerchantCacheService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
+    debugPrint('📦 CACHE MERCHANTS: Storing ${merchants.length} merchants');
+
     // Store individual merchants by NFC UID for fast lookup (normalized to uppercase)
     for (final merchant in merchants) {
+      // Log status for debugging
+      debugPrint(
+        '   - ${merchant['full_name']}: status=${merchant['status']}, nfc=${merchant['nfc_uid']}',
+      );
+
       final nfcUid = merchant['nfc_uid']?.toString();
       if (nfcUid != null && nfcUid.isNotEmpty) {
         // Normalize to uppercase for consistent lookups
@@ -40,6 +47,8 @@ class MerchantCacheService {
     await prefs.setString(_merchantListKey, jsonEncode(merchants));
     await prefs.setInt(_marketIdKey, marketId);
     await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+
+    debugPrint('📦 CACHE MERCHANTS: Complete!');
   }
 
   /// Save merchants list directly without requiring marketId.
@@ -68,11 +77,18 @@ class MerchantCacheService {
     final prefs = await SharedPreferences.getInstance();
     final normalizedUid = nfcUid.toUpperCase().trim();
 
+    debugPrint('🔍 CACHE LOOKUP: Searching for NFC=$normalizedUid');
+
     // Try direct key lookup first (fast path)
     final merchantStr = prefs.getString('$_cacheKeyPrefix$normalizedUid');
     if (merchantStr != null) {
       try {
-        return jsonDecode(merchantStr) as Map<String, dynamic>;
+        final merchant = jsonDecode(merchantStr) as Map<String, dynamic>;
+        debugPrint('   ✅ Found via direct lookup:');
+        debugPrint('      - Name: ${merchant['full_name']}');
+        debugPrint('      - Status: ${merchant['status']}');
+        debugPrint('      - ID: ${merchant['id']}');
+        return merchant;
       } catch (e) {
         debugPrint('Error decoding cached merchant: $e');
       }
@@ -82,13 +98,20 @@ class MerchantCacheService {
     final merchants = await getAllCachedMerchants();
     final searchUid = nfcUid.toLowerCase().trim();
 
+    debugPrint('   🔍 Fallback: searching in list of ${merchants.length} merchants');
+
     try {
-      return merchants.firstWhere((m) {
+      final merchant = merchants.firstWhere((m) {
         final mNfc = (m['nfc_uid'] ?? '').toString().toLowerCase().trim();
         return mNfc == searchUid;
       });
+      debugPrint('   ✅ Found via list search:');
+      debugPrint('      - Name: ${merchant['full_name']}');
+      debugPrint('      - Status: ${merchant['status']}');
+      return merchant;
     } catch (e) {
       // Not found
+      debugPrint('   ❌ NOT FOUND in cache');
       return null;
     }
   }
