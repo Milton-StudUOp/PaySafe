@@ -309,15 +309,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _processPayment() async {
+    // ═══════════════════════════════════════════════════════════════════
+    // THIS IS THE LATEST CODE - IF YOU DON'T SEE THIS LOG, REBUILD APP!
+    // ═══════════════════════════════════════════════════════════════════
+    debugPrint('');
+    debugPrint(
+      '╔════════════════════════════════════════════════════════════╗',
+    );
+    debugPrint(
+      '║  🚀 _processPayment STARTED (LATEST CODE v2)               ║',
+    );
+    debugPrint(
+      '╚════════════════════════════════════════════════════════════╝',
+    );
+
     // ============ FINAL SAFETY CHECK: MERCHANT STATUS ============
     // Block payments to suspended/blocked merchants regardless of flow path
     final merchantStatus =
         _selectedMerchant?['status']?.toString().toUpperCase() ?? 'ATIVO';
-    debugPrint(
-      '🛡️ PAYMENT STATUS CHECK: ${_selectedMerchant?['full_name']} -> status=$merchantStatus',
-    );
+    debugPrint('🛡️ MERCHANT STATUS CHECK:');
+    debugPrint('   - Merchant: ${_selectedMerchant?['full_name']}');
+    debugPrint('   - Status from data: ${_selectedMerchant?['status']}');
+    debugPrint('   - Normalized: $merchantStatus');
 
     if (merchantStatus == 'SUSPENSO') {
+      debugPrint('   ❌ BLOCKING: Merchant is SUSPENSO!');
       UIUtils.showErrorSnackBar(
         context,
         "⚠️ Comerciante SUSPENSO - Não pode receber pagamentos!",
@@ -326,12 +342,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     if (merchantStatus == 'BLOQUEADO') {
+      debugPrint('   ❌ BLOCKING: Merchant is BLOQUEADO!');
       UIUtils.showErrorSnackBar(
         context,
         "🚫 Comerciante BLOQUEADO - Não pode receber pagamentos!",
       );
       return;
     }
+
+    debugPrint('   ✅ Status OK - proceeding with payment');
     // =============================================================
 
     if (_selectedMethod != 'DINHEIRO' && !_validateCustomerNumber()) {
