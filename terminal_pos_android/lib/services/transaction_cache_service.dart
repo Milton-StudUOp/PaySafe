@@ -64,6 +64,7 @@ class TransactionCacheService {
   }
 
   /// Get transactions filtered by date range.
+  /// Both startDate and endDate are INCLUSIVE.
   Future<List<Map<String, dynamic>>> getTransactionsByDateRange({
     required DateTime startDate,
     required DateTime endDate,
@@ -73,8 +74,14 @@ class TransactionCacheService {
     return transactions.where((t) {
       final createdAt = DateTime.tryParse(t['created_at']?.toString() ?? '');
       if (createdAt == null) return false;
-      return createdAt.isAfter(startDate) &&
-          createdAt.isBefore(endDate.add(const Duration(days: 1)));
+
+      // Inclusive comparison: >= startDate AND <= endDate
+      final isAfterOrAtStart =
+          createdAt.isAtSameMomentAs(startDate) || createdAt.isAfter(startDate);
+      final isBeforeOrAtEnd =
+          createdAt.isAtSameMomentAs(endDate) || createdAt.isBefore(endDate);
+
+      return isAfterOrAtStart && isBeforeOrAtEnd;
     }).toList();
   }
 
