@@ -309,6 +309,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _processPayment() async {
+    // ============ FINAL SAFETY CHECK: MERCHANT STATUS ============
+    // Block payments to suspended/blocked merchants regardless of flow path
+    final merchantStatus =
+        _selectedMerchant?['status']?.toString().toUpperCase() ?? 'ATIVO';
+    debugPrint(
+      '🛡️ PAYMENT STATUS CHECK: ${_selectedMerchant?['full_name']} -> status=$merchantStatus',
+    );
+
+    if (merchantStatus == 'SUSPENSO') {
+      UIUtils.showErrorSnackBar(
+        context,
+        "⚠️ Comerciante SUSPENSO - Não pode receber pagamentos!",
+      );
+      return;
+    }
+
+    if (merchantStatus == 'BLOQUEADO') {
+      UIUtils.showErrorSnackBar(
+        context,
+        "🚫 Comerciante BLOQUEADO - Não pode receber pagamentos!",
+      );
+      return;
+    }
+    // =============================================================
+
     if (_selectedMethod != 'DINHEIRO' && !_validateCustomerNumber()) {
       String helpText = "";
       if (_selectedMethod == 'MPESA') {
