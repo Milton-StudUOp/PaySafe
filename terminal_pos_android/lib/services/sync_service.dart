@@ -406,6 +406,13 @@ class SyncService {
             mkeshNumber: finalData['mkesh_number'],
             nfcUid: finalData['nfc_uid'],
             businessType: finalData['business_type'] ?? 'AMBULANTE',
+            // Document fields
+            idDocumentType: finalData['id_document_type'],
+            idDocumentNumber: finalData['id_document_number'],
+            idDocumentExpiry: finalData['id_document_expiry'],
+            // Business fields
+            businessName: finalData['business_name'],
+            notes: finalData['notes'],
           );
 
           debugPrint('   📥 API Response: $response');

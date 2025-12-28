@@ -108,6 +108,13 @@ class MerchantService {
     String? stallNumber,
     String? idNumber,
     String businessType = 'AMBULANTE',
+    // Document fields
+    String? idDocumentType,
+    String? idDocumentNumber,
+    String? idDocumentExpiry,
+    // Business fields
+    String? businessName,
+    String? notes,
   }) async {
     final body = {
       'full_name': fullName,
@@ -120,6 +127,13 @@ class MerchantService {
       if (nfcUid != null) 'nfc_uid': nfcUid,
       if (stallNumber != null) 'stall_number': stallNumber,
       if (idNumber != null) 'id_number': idNumber,
+      // Document fields
+      if (idDocumentType != null) 'id_document_type': idDocumentType,
+      if (idDocumentNumber != null) 'id_document_number': idDocumentNumber,
+      if (idDocumentExpiry != null) 'id_document_expiry': idDocumentExpiry,
+      // Business fields
+      if (businessName != null) 'business_name': businessName,
+      if (notes != null) 'notes': notes,
     };
 
     final response = await _authService.authenticatedPost('/merchants/', body);
