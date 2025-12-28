@@ -24,15 +24,25 @@ class OfflineMerchantQueueService {
     String? gender,
     required int agentId,
     required String agentName,
+    // Document fields
+    String? idDocumentType,
+    String? idDocumentNumber,
+    String? idDocumentExpiry,
+    // Business fields
+    String? businessName,
+    String? businessType,
+    String? merchantType,
+    String? notes,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
     // Generate temporary ID
     final tempId = 'OFFLINE_MERCHANT_${DateTime.now().millisecondsSinceEpoch}';
 
-    // Create queued registration
+    // Create queued registration with ALL fields
     final registration = {
       'temp_id': tempId,
+      'id': tempId, // Also set as id for consistency
       'full_name': fullName,
       'phone_number': phoneNumber,
       'market_id': marketId,
@@ -42,12 +52,22 @@ class OfflineMerchantQueueService {
       'mkesh_number': mkeshNumber,
       'birth_date': birthDate,
       'gender': gender,
-      'business_type': 'AMBULANTE', // Required by backend
+      // Document fields
+      'id_document_type': idDocumentType ?? 'BI',
+      'id_document_number': idDocumentNumber,
+      'id_document_expiry': idDocumentExpiry,
+      // Business fields
+      'business_name': businessName,
+      'business_type': businessType ?? merchantType ?? 'AMBULANTE',
+      'merchant_type': merchantType ?? 'AMBULANTE',
+      'notes': notes,
+      // Metadata
       'agent_id': agentId,
       'agent_name': agentName,
       'status': 'PENDENTE_SYNC',
       'created_at': DateTime.now().toIso8601String(),
       'synced': false,
+      'is_offline_pending': true,
     };
 
     // Get existing queue

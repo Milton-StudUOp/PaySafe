@@ -172,6 +172,25 @@ class _MerchantRegistrationScreenState
               : null,
           agentId: userData?['id'] ?? 0,
           agentName: userData?['name'] ?? 'Agente',
+          // Document fields
+          idDocumentType: _idType,
+          idDocumentNumber: _idNumberController.text.trim().isNotEmpty
+              ? _idNumberController.text.trim()
+              : null,
+          idDocumentExpiry: _idExpiryController.text.trim().isNotEmpty
+              ? _idExpiryController.text.trim()
+              : null,
+          // Business fields
+          businessName: _businessNameController.text.trim().isNotEmpty
+              ? _businessNameController.text.trim()
+              : null,
+          businessType: _businessTypeController.text.trim().isNotEmpty
+              ? _businessTypeController.text.trim()
+              : null,
+          merchantType: _merchantType,
+          notes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : null,
         );
 
         // ADD TO CACHE IMMEDIATELY: Make merchant available for search and payments
@@ -191,6 +210,25 @@ class _MerchantRegistrationScreenState
               : null,
           'mkesh_number': _mkeshController.text.trim().isNotEmpty
               ? _mkeshController.text.trim()
+              : null,
+          // Document fields
+          'id_document_type': _idType,
+          'id_document_number': _idNumberController.text.trim().isNotEmpty
+              ? _idNumberController.text.trim()
+              : null,
+          'id_document_expiry': _idExpiryController.text.trim().isNotEmpty
+              ? _idExpiryController.text.trim()
+              : null,
+          // Business fields
+          'business_name': _businessNameController.text.trim().isNotEmpty
+              ? _businessNameController.text.trim()
+              : null,
+          'business_type': _businessTypeController.text.trim().isNotEmpty
+              ? _businessTypeController.text.trim()
+              : _merchantType,
+          'merchant_type': _merchantType,
+          'notes': _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
               : null,
           'is_offline_pending': true, // Flag for UI indication
         });
