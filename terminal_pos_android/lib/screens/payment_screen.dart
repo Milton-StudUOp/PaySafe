@@ -193,6 +193,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
         throw Exception('Comerciante não encontrado');
       }
 
+      // ============ STATUS VALIDATION ============
+      // Block payments to suspended or blocked merchants
+      final merchantStatus =
+          merchant['status']?.toString().toUpperCase() ?? 'ATIVO';
+
+      if (merchantStatus == 'SUSPENSO') {
+        setState(() {
+          _errorMessage =
+              "⚠️ Comerciante SUSPENSO\nNão pode receber pagamentos.";
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (merchantStatus == 'BLOQUEADO') {
+        setState(() {
+          _errorMessage =
+              "🚫 Comerciante BLOQUEADO\nNão pode receber pagamentos.";
+          _isLoading = false;
+        });
+        return;
+      }
+      // ============================================
+
       // Fetch market to enrich merchant data (skip if market info already cached)
       final marketId = merchant['market_id'];
       if (marketId != null && merchant['market_name'] == null) {
