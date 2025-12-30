@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from datetime import date, datetime, timedelta
 import logging
 
-from app.database import async_session_maker
+from app.database import SessionLocal
 from app.models import Merchant, PaymentStatus, MerchantFeePayment
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ async def check_daily_payments():
     """
     logger.info("🕐 Starting daily payment check job...")
     
-    async with async_session_maker() as db:
+    async with SessionLocal() as db:
         try:
             today = date.today()
             yesterday = today - timedelta(days=1)
