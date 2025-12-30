@@ -483,7 +483,7 @@ export default function MerchantsPage() {
                 </CardContent>
             </Card>
 
-            <CreateMerchantDialog onSuccess={fetchMerchantsData} />
+
 
             <Dialog open={!!editingDateMerchant} onOpenChange={(open) => !open && setEditingDateMerchant(null)}>
                 <DialogContent>

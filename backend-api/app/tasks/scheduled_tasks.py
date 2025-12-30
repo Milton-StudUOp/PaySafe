@@ -12,6 +12,8 @@ import math
 
 from app.database import SessionLocal
 from app.models import Merchant, PaymentStatus, MerchantFeePayment
+import socket
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,7 @@ async def check_daily_payments():
             irregular_count = 0
             
             for merchant in merchants:
-                # 1. Calculate Expected Amount
+                # 1. Calculate Expected Amount (Inclusive of TODAY)
                 # If registered_at is None, assume today (shouldn't happen for valid merchants)
                 reg_date = merchant.registered_at.date() if merchant.registered_at else today
                 
@@ -64,22 +66,19 @@ async def check_daily_payments():
                 # 2. merchant.registered_at (Default for new users)
                 billing_start_date = merchant.billing_start_date or reg_date
                 
-                # If billing start date is in future relative to yesterday, no fees yet
-                if billing_start_date > yesterday:
+                # If billing start date is in future, no fees yet
+                if billing_start_date > today:
                     days_billed = 0
                 else:
-                    days_billed = (yesterday - billing_start_date).days + 1
+                    days_billed = (today - billing_start_date).days + 1
                 
                 expected_amount = days_billed * DAILY_FEE_AMOUNT
                 
                 # 2. Calculate Total Paid
-                # Limit to payments made until today's execution (though unlikely they paid in future)
                 payment_result = await db.execute(
                     select(func.sum(MerchantFeePayment.amount))
                     .where(MerchantFeePayment.merchant_id == merchant.id)
                 )
-                # scalar() returns None if no rows, likely 0 if rows but null sum? 
-                # SQLAlchemy sum returns None if no matches usually.
                 total_paid = payment_result.scalar() or 0.0
                 total_paid = float(total_paid)
                 
@@ -142,8 +141,22 @@ def start_scheduler():
         misfire_grace_time=3600  # Allow up to 1 hour delay if server was down
     )
     
+    
+    # SINGLETON LOCK MECHANISM:
+    # Try to bind to a specific port. If successful, we are the scheduler leader.
+    # If failed (address in use), another worker is already the scheduler.
+    global scheduler_socket
+    try:
+        scheduler_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        scheduler_socket.bind(("127.0.0.1", 4321))
+        # Keep the socket open to hold the lock
+    except OSError:
+        logger.info("🔒 Scheduler lock held by another worker. Skipping scheduler startup.")
+        return
+
     scheduler.start()
-    logger.info("📅 Scheduler started - Daily payment check scheduled for 00:00")
+    logger.info("📅 Scheduler started (Leader) - Daily payment check scheduled for 00:00")
+
 
 
 def stop_scheduler():

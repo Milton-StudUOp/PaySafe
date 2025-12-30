@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List
 from datetime import date, datetime
+import math
 
 from app.database import get_db
 from app.models import Merchant, MerchantFeePayment, PaymentStatus
@@ -70,11 +71,38 @@ async def record_fee_payment(
         notes=payment.notes
     )
     db.add(fee_payment)
+    await db.flush() # Ensure payment is counted in sum
     
-    # Atualizar status do comerciante para REGULAR
-    merchant.payment_status = PaymentStatus.REGULAR
+    # Recalculate Status check (Cumulative)
+    today = date.today()
+    reg_date = merchant.registered_at.date() if merchant.registered_at else today
+    billing_start_date = merchant.billing_start_date or reg_date
+    
+    if billing_start_date > today:
+        days_billed = 0
+    else:
+        days_billed = (today - billing_start_date).days + 1
+            
+    expected_amount = days_billed * DAILY_FEE_AMOUNT
+    
+    # Get total paid including this new payment
+    payment_result = await db.execute(
+        select(func.sum(MerchantFeePayment.amount))
+        .where(MerchantFeePayment.merchant_id == merchant_id)
+    )
+    total_paid = float(payment_result.scalar() or 0.0)
+    
+    balance = total_paid - expected_amount
+    
+    if balance >= 0:
+        merchant.payment_status = PaymentStatus.REGULAR
+        merchant.days_overdue = 0
+    else:
+        merchant.payment_status = PaymentStatus.IRREGULAR
+        overdue_amount = abs(balance)
+        merchant.days_overdue = math.ceil(overdue_amount / DAILY_FEE_AMOUNT)
+    
     merchant.last_fee_payment_date = date.today()
-    merchant.days_overdue = 0
     
     await db.commit()
     await db.refresh(fee_payment)
