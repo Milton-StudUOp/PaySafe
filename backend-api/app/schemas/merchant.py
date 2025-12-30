@@ -23,6 +23,11 @@ class MerchantStatus(str, Enum):
     SUSPENSO = "SUSPENSO"
     BLOQUEADO = "BLOQUEADO"
 
+class PaymentStatus(str, Enum):
+    """Status de pagamento da taxa diária (10 MT/dia)."""
+    REGULAR = "REGULAR"      # Pagamento em dia
+    IRREGULAR = "IRREGULAR"  # Pagamento em atraso
+
 class MerchantBase(BaseModel):
     merchant_type: MerchantType = MerchantType.FIXO
     full_name: str
@@ -76,6 +81,11 @@ class Merchant(MerchantBase):
     market_district: Optional[str] = None  # Enriched from market
 
     approval_status: ApprovalStatus = ApprovalStatus.APROVADO
+    
+    # Payment status for daily fee (10 MT/day)
+    payment_status: PaymentStatus = PaymentStatus.REGULAR
+    last_fee_payment_date: Optional[date] = None
+    days_overdue: int = 0
 
     class Config:
         from_attributes = True

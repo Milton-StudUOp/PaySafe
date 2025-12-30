@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Enum, TIMESTAMP, Date, ForeignKey, func
+from sqlalchemy import Column, BigInteger, String, Enum, TIMESTAMP, Date, ForeignKey, func, Integer
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -27,6 +27,11 @@ class ApprovalStatus(str, enum.Enum):
     APROVADO = "APROVADO"
     PENDENTE = "PENDENTE"
     REJEITADO = "REJEITADO"
+
+class PaymentStatus(str, enum.Enum):
+    """Status de pagamento da taxa diária do comerciante."""
+    REGULAR = "REGULAR"      # Pagamento em dia
+    IRREGULAR = "IRREGULAR"  # Pagamento em atraso
 
 class Merchant(Base):
     __tablename__ = "merchants"
@@ -63,9 +68,14 @@ class Merchant(Base):
     # NFC
     nfc_uid = Column(String(100), unique=True, nullable=True)
     
-    # Estado
+    # Estado de atividade
     status = Column(Enum(MerchantStatus), default=MerchantStatus.ATIVO)
     approval_status = Column(Enum(ApprovalStatus), default=ApprovalStatus.APROVADO)
+    
+    # Estado de pagamento de taxa diária (10 MT/dia)
+    payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.REGULAR)
+    last_fee_payment_date = Column(Date, nullable=True)  # Última data que pagou taxa
+    days_overdue = Column(Integer, default=0)  # Dias em atraso
     
     # Datas
     registered_at = Column(TIMESTAMP, server_default=func.current_timestamp())
@@ -73,3 +83,5 @@ class Merchant(Base):
     # Relationships
     market = relationship("Market", backref="merchants")
     transactions = relationship("Transaction", back_populates="merchant")
+    fee_payments = relationship("MerchantFeePayment", back_populates="merchant")
+

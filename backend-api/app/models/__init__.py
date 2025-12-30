@@ -1,5 +1,6 @@
 from .market import Market, MarketStatus, ApprovalStatus
-from .merchant import Merchant, MerchantType, IdDocumentType, MobileOperator, MerchantStatus
+from .merchant import Merchant, MerchantType, IdDocumentType, MobileOperator, MerchantStatus, PaymentStatus
+from .merchant_fee_payment import MerchantFeePayment
 from .agent import Agent, AgentStatus
 from .pos_device import POSDevice, POSStatus
 from .transaction import Transaction, PaymentMethod, TransactionStatus
@@ -12,7 +13,8 @@ from .location import Province, Municipality
 
 __all__ = [
     "Market", "MarketStatus", "ApprovalStatus",
-    "Merchant", "MerchantType", "IdDocumentType", "MobileOperator", "MerchantStatus",
+    "Merchant", "MerchantType", "IdDocumentType", "MobileOperator", "MerchantStatus", "PaymentStatus",
+    "MerchantFeePayment",
     "Agent", "AgentStatus",
     "POSDevice", "POSStatus",
     "Transaction", "PaymentMethod", "TransactionStatus",
@@ -23,4 +25,5 @@ __all__ = [
     "JurisdictionChangeRequest", "EntityType",
     "Province", "Municipality",
 ]
+
 
