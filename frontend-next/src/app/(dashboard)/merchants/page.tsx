@@ -250,8 +250,8 @@ export default function MerchantsPage() {
                                 onChange={(e) => setPaymentStatusFilter(e.target.value)}
                             >
                                 <option value="ALL">Pagamento</option>
-                                <option value="REGULAR">✅ Regular</option>
-                                <option value="IRREGULAR">⚠️ Irregular</option>
+                                <option value="REGULAR">Regular</option>
+                                <option value="IRREGULAR">Irregular</option>
                             </select>
                         </div>
 
@@ -338,7 +338,7 @@ export default function MerchantsPage() {
                                                 {merchant.payment_status === "IRREGULAR" ? (
                                                     <div className="flex flex-col items-start">
                                                         <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200">
-                                                            ⚠️ Irregular
+                                                            Irregular
                                                         </Badge>
                                                         {merchant.days_overdue && merchant.days_overdue > 0 && (
                                                             <span className="text-[10px] text-red-500 font-medium">
@@ -348,7 +348,7 @@ export default function MerchantsPage() {
                                                     </div>
                                                 ) : (
                                                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                        ✅ Regular
+                                                        Regular
                                                     </Badge>
                                                 )}
                                             </TableCell>
