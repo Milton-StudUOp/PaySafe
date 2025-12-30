@@ -15,6 +15,7 @@ from app.schemas.merchant_fee import (
     FeePaymentCreate, FeePaymentResponse, FeeStatusResponse,
     SetRegularRequest, IrregularMerchantResponse, FeeSummaryResponse, PaymentStatus as SchemaPaymentStatus
 )
+from app.schemas.merchant import MerchantResponse
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/merchant-fees", tags=["Merchant Fees"])
