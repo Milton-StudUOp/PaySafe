@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import Header from "@/components/layout/Header"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, Loader2, Filter, Eye, MoreHorizontal, FileText, Download, CheckCircle } from "lucide-react"
+import { Plus, Search, Loader2, Filter, Eye, MoreHorizontal, FileText, Download, CheckCircle, Calendar as CalendarIcon } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { CreateMerchantDialog } from "@/components/forms/CreateMerchantDialog"
@@ -30,6 +30,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function MerchantsPage() {
@@ -58,26 +67,115 @@ export default function MerchantsPage() {
                 description: `${merchantName} foi marcado como Regular`,
             })
             // Reload data to reflect changes
-            fetchData()
-        } catch {
+            fetchMerchants()
+        } catch (error) {
             toast({
                 title: "Erro",
-                description: "Não foi possível alterar o estado de pagamento",
+                description: "Erro ao marcar como regular",
                 variant: "destructive"
             })
         }
     }
 
+    // State for billing date dialog
+    const [editingDateMerchant, setEditingDateMerchant] = useState<Merchant | null>(null)
+    const [newStartDate, setNewStartDate] = useState("")
+    const [updatingDate, setUpdatingDate] = useState(false)
+
+    const openDateDialog = (merchant: Merchant) => {
+        setEditingDateMerchant(merchant)
+        // Set default to current billing date or registered date or today
+        // billing_start_date coming from API might strictly be YYYY-MM-DD
+        const initialDate = merchant.billing_start_date
+            ? merchant.billing_start_date.toString()
+            : (merchant.registered_at ? new Date(merchant.registered_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+
+        setNewStartDate(initialDate)
+    }
+
+    const handleUpdateDate = async () => {
+        if (!editingDateMerchant || !newStartDate) return
+
+        try {
+            setUpdatingDate(true)
+            await api.put(`/merchant-fees/${editingDateMerchant.id}/billing-date`, {
+                start_date: newStartDate
+            })
+
+            toast({
+                title: "Sucesso",
+                description: `Data de início de cobrança atualizada.`,
+                variant: "success",
+                className: "bg-green-50 border-green-200 text-green-800"
+            })
+
+            setEditingDateMerchant(null)
+            fetchMerchants()
+        } catch (error) {
+            console.error(error)
+            toast({
+                title: "Erro",
+                description: "Falha ao atualizar data.",
+                variant: "destructive"
+            })
+        } finally {
+            setUpdatingDate(false)
+        }
+    }
+
+    const fetchData = async () => {
+        setLoading(true)
+        try {
+            const params: any = {}
+            if (provinceFilter !== "ALL") params.province = provinceFilter
+            if (districtFilter) params.district = districtFilter
+
+            const [resMerchants, resMarkets] = await Promise.all([
+                api.get("/merchants/", { params }),
+                api.get("/markets/")
+            ])
+            setMerchants(resMerchants.data)
+            setMarkets(resMarkets.data)
+        } catch (error) {
+            console.error("Error fetching data:", error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     useEffect(() => {
-        // Debounce for text inputs potentially, but for now direct call or simple debounce
+        // Debounce for text inputs
         const timer = setTimeout(() => {
             fetchData()
         }, 500)
         return () => clearTimeout(timer)
     }, [provinceFilter, districtFilter])
-    // Market/Status/Search are currently Client Side so we don't need to re-fetch?
-    // Wait, if I change Province, I get new data. Market/Status still apply client side.
-    // Yes.
+
+    const filteredMerchants = merchants.filter((m: Merchant) => {
+        // Tab Filter
+        if (activeTab !== "ALL" && m.merchant_type !== activeTab) return false
+
+        // Search Filter
+        const searchLower = search.toLowerCase()
+        const matchesSearch =
+            m.full_name.toLowerCase().includes(searchLower) ||
+            m.phone_number?.includes(searchLower) ||
+            m.nfc_uid?.toLowerCase().includes(searchLower) ||
+            m.id.toString().includes(searchLower)
+
+        if (!matchesSearch) return false
+
+        // Market Filter
+        if (marketFilter !== "ALL" && m.market_id?.toString() !== marketFilter) return false
+
+        // Status Filter
+        if (statusFilter !== "ALL" && m.status !== statusFilter) return false
+
+        // Payment Status Filter
+        if (paymentStatusFilter !== "ALL" && m.payment_status !== paymentStatusFilter) return false
+
+        return true
+    })
 
     const fetchData = async () => {
         setLoading(true)
@@ -400,13 +498,16 @@ export default function MerchantsPage() {
                                                             </DropdownMenuItem>
                                                         </Link>
                                                         {merchant.payment_status === "IRREGULAR" && (
-                                                            <DropdownMenuItem
-                                                                onClick={() => setMerchantRegular(merchant.id, merchant.full_name)}
-                                                            >
+                                                            <DropdownMenuItem onClick={() => setMerchantRegular(merchant.id, merchant.full_name)}>
                                                                 <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                                                                Marcar como Regular
+                                                                <span>Marcar como Regular</span>
                                                             </DropdownMenuItem>
                                                         )}
+
+                                                        <DropdownMenuItem onClick={() => openDateDialog(merchant)}>
+                                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                                            <span>Alterar Início Cobrança</span>
+                                                        </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>

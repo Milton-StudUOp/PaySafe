@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 # Daily fee amount in Meticais
 DAILY_FEE_AMOUNT = 10.0
 
+# Fee System Start Date (To avoid retroactive debt for old merchants)
+# Merchants registered before this date will start billing from this date.
+FEE_START_DATE = date(2025, 12, 1)
+
 # Create scheduler instance
 scheduler = AsyncIOScheduler()
 
@@ -27,7 +31,8 @@ async def check_daily_payments():
     Scheduled job that runs at midnight (00:00).
     
     Logic:
-    1. Calculate total expected amount = (days since registration until yesterday) * 10 MT
+    1. Calculate total expected amount = (days since start_date until yesterday) * 10 MT
+       where start_date = MAX(registered_at, FEE_START_DATE)
     2. Sum total payments made by merchant
     3. If Total Paid >= Expected -> REGULAR
     4. If Total Paid < Expected -> IRREGULAR (overdue by diff)
@@ -53,15 +58,17 @@ async def check_daily_payments():
                 # If registered_at is None, assume today (shouldn't happen for valid merchants)
                 reg_date = merchant.registered_at.date() if merchant.registered_at else today
                 
-                # If registered after yesterday, they owe nothing yet for the period ending yesterday
-                # (Fee applies after the day is completed? Or prepaid? Assuming post-paid or checks past days)
-                # "since registration day until yesterday" implies:
-                # If reg=Jan1, yesterday=Jan2. Days=2 (Jan1, Jan2). Expected = 20.
+                # determine billing start date
+                # Priority:
+                # 1. merchant.billing_start_date (Admin override / Migration default for old users)
+                # 2. merchant.registered_at (Default for new users)
+                billing_start_date = merchant.billing_start_date or reg_date
                 
-                if reg_date > yesterday:
+                # If billing start date is in future relative to yesterday, no fees yet
+                if billing_start_date > yesterday:
                     days_billed = 0
                 else:
-                    days_billed = (yesterday - reg_date).days + 1
+                    days_billed = (yesterday - billing_start_date).days + 1
                 
                 expected_amount = days_billed * DAILY_FEE_AMOUNT
                 

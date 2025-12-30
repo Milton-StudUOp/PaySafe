@@ -75,6 +75,7 @@ class Merchant(Base):
     # Estado de pagamento de taxa diária (10 MT/dia)
     payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.REGULAR)
     last_fee_payment_date = Column(Date, nullable=True)  # Última data que pagou taxa
+    billing_start_date = Column(Date, nullable=True)     # Data de início da cobrança (customizável)
     days_overdue = Column(Integer, default=0)  # Dias em atraso
     
     # Datas

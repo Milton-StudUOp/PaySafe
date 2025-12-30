@@ -219,29 +219,60 @@ async def get_fee_history(
     return result.scalars().all()
 
 
-@router.post("/run-check")
-async def run_payment_check_manually(
-    current_user: UserModel = Depends(get_current_user)
+@router.post("/run-check", status_code=status.HTTP_200_OK)
+async def trigger_payment_check(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Admin trigger manual do job de verificação de pagamentos.
-    Normalmente roda à meia-noite automaticamente.
+    Manually trigger the daily payment check job.
+    Admin only.
     """
-    # Apenas ADMIN pode executar manualmente
-    if current_user.role.value != "ADMIN":
+    if current_user.role != "ADMIN":
         raise HTTPException(
-            status_code=403, 
-            detail="Apenas ADMIN pode executar verificação manual"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can trigger payment checks"
         )
     
-    from app.tasks import run_payment_check_now
+    # Run in background to check all merchants
+    background_tasks.add_task(run_payment_check_now)
     
-    try:
-        await run_payment_check_now()
-        return {"message": "Verificação de pagamentos executada com sucesso"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao executar verificação: {str(e)}"
-        )
+    return {"message": "Payment check job triggered in background"}
 
+
+@router.put("/{merchant_id}/billing-date", response_model=MerchantResponse)
+async def update_billing_start_date(
+    merchant_id: int,
+    start_date: date = Body(..., embed=True),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update the billing start date for a merchant.
+    This controls when valid fees start accumulating.
+    Admin only.
+    """
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update billing dates"
+        )
+        
+    result = await db.execute(select(Merchant).where(Merchant.id == merchant_id))
+    merchant = result.scalar_one_or_none()
+    
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+        
+    merchant.billing_start_date = start_date
+    
+    # If date is changed, maybe re-evaluate status? 
+    # For now, just save. Next daily check will correct it.
+    # Or we can trigger a check for this merchant specifically? 
+    # Simpler to just save.
+    
+    await db.commit()
+    await db.refresh(merchant)
+    
+    return merchant

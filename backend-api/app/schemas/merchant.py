@@ -83,9 +83,10 @@ class Merchant(MerchantBase):
     approval_status: ApprovalStatus = ApprovalStatus.APROVADO
     
     # Payment status for daily fee (10 MT/day)
-    payment_status: PaymentStatus = PaymentStatus.REGULAR
+    payment_status: Optional[PaymentStatus] = None
     last_fee_payment_date: Optional[date] = None
-    days_overdue: int = 0
+    billing_start_date: Optional[date] = None
+    days_overdue: Optional[int] = 0
 
     class Config:
         from_attributes = True
