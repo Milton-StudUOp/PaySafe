@@ -48,6 +48,11 @@ export interface Merchant {
 
     // Approval
     approval_status?: "APROVADO" | "PENDENTE" | "REJEITADO";
+
+    // Payment Status (Daily Fee - 10 MT/day)
+    payment_status?: "REGULAR" | "IRREGULAR";
+    last_fee_payment_date?: string;
+    days_overdue?: number;
 }
 
 export interface Agent {

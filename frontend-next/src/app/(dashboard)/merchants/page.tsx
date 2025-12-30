@@ -33,6 +33,7 @@ export default function MerchantsPage() {
     const [activeTab, setActiveTab] = useState("ALL")
     const [marketFilter, setMarketFilter] = useState("ALL")
     const [statusFilter, setStatusFilter] = useState("ALL")
+    const [paymentStatusFilter, setPaymentStatusFilter] = useState("ALL")
     const [provinceFilter, setProvinceFilter] = useState("ALL")
     const [districtFilter, setDistrictFilter] = useState("")
 
@@ -86,6 +87,9 @@ export default function MerchantsPage() {
 
         // Status Filter
         if (statusFilter !== "ALL" && m.status !== statusFilter) return false
+
+        // Payment Status Filter
+        if (paymentStatusFilter !== "ALL" && m.payment_status !== paymentStatusFilter) return false
 
         return true
     })
@@ -238,11 +242,25 @@ export default function MerchantsPage() {
                             </select>
                         </div>
 
-                        <div className="md:col-span-1 flex justify-end">
+                        {/* PAYMENT STATUS FILTER */}
+                        <div className="md:col-span-1">
+                            <select
+                                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                value={paymentStatusFilter}
+                                onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                            >
+                                <option value="ALL">Pagamento</option>
+                                <option value="REGULAR">✅ Regular</option>
+                                <option value="IRREGULAR">⚠️ Irregular</option>
+                            </select>
+                        </div>
+
+                        <div className="flex justify-end">
                             <Button variant="ghost" className="text-slate-500 p-2" onClick={() => {
                                 setSearch("")
                                 setMarketFilter("ALL")
                                 setStatusFilter("ALL")
+                                setPaymentStatusFilter("ALL")
                                 setProvinceFilter("ALL")
                                 setDistrictFilter("")
                                 setActiveTab("ALL")
@@ -268,6 +286,7 @@ export default function MerchantsPage() {
                                         <TableHead>Contato</TableHead>
                                         <TableHead>UID / Doc</TableHead>
                                         <TableHead>Status</TableHead>
+                                        <TableHead>Pagamento</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -313,6 +332,25 @@ export default function MerchantsPage() {
                                                         <StatusBadge status={(merchant as any).approval_status} showIcon={true} className="text-[10px] h-5" />
                                                     )}
                                                 </div>
+                                            </TableCell>
+                                            {/* Payment Status Column */}
+                                            <TableCell>
+                                                {merchant.payment_status === "IRREGULAR" ? (
+                                                    <div className="flex flex-col items-start">
+                                                        <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200">
+                                                            ⚠️ Irregular
+                                                        </Badge>
+                                                        {merchant.days_overdue && merchant.days_overdue > 0 && (
+                                                            <span className="text-[10px] text-red-500 font-medium">
+                                                                {merchant.days_overdue} dia{merchant.days_overdue > 1 ? 's' : ''} em atraso
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                                        ✅ Regular
+                                                    </Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end items-center gap-1">
