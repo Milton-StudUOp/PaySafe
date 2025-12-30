@@ -1,6 +1,6 @@
 "use client"
 
-import { ChangeEvent, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import api from "@/lib/api"
 import { Merchant, Market } from "@/types"
 import {
@@ -15,11 +15,11 @@ import { Button } from "@/components/ui/button"
 import Header from "@/components/layout/Header"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, Loader2, Filter, Eye, MoreHorizontal, FileText, Download, CheckCircle, Calendar as CalendarIcon } from "lucide-react"
+import { Plus, Search, Loader2, Download, CheckCircle, Calendar as CalendarIcon, MoreHorizontal, Eye } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { CreateMerchantDialog } from "@/components/forms/CreateMerchantDialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StatusBadge } from "@/components/StatusBadge"
 import Link from "next/link"
 import {
@@ -40,12 +40,14 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth"
 
 export default function MerchantsPage() {
     const [merchants, setMerchants] = useState<Merchant[]>([])
     const [markets, setMarkets] = useState<Market[]>([])
     const [loading, setLoading] = useState(true)
     const { toast } = useToast()
+    const { user } = useAuth()
 
     // Filters
     const [search, setSearch] = useState("")
@@ -67,7 +69,7 @@ export default function MerchantsPage() {
                 description: `${merchantName} foi marcado como Regular`,
             })
             // Reload data to reflect changes
-            fetchMerchants()
+            fetchMerchantsData()
         } catch (error) {
             toast({
                 title: "Erro",
@@ -84,8 +86,6 @@ export default function MerchantsPage() {
 
     const openDateDialog = (merchant: Merchant) => {
         setEditingDateMerchant(merchant)
-        // Set default to current billing date or registered date or today
-        // billing_start_date coming from API might strictly be YYYY-MM-DD
         const initialDate = merchant.billing_start_date
             ? merchant.billing_start_date.toString()
             : (merchant.registered_at ? new Date(merchant.registered_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
@@ -110,7 +110,7 @@ export default function MerchantsPage() {
             })
 
             setEditingDateMerchant(null)
-            fetchMerchants()
+            fetchMerchantsData()
         } catch (error) {
             console.error(error)
             toast({
@@ -123,7 +123,7 @@ export default function MerchantsPage() {
         }
     }
 
-    const fetchData = async () => {
+    const fetchMerchantsData = async () => {
         setLoading(true)
         try {
             const params: any = {}
@@ -144,9 +144,8 @@ export default function MerchantsPage() {
     }
 
     useEffect(() => {
-        // Debounce for text inputs
         const timer = setTimeout(() => {
-            fetchData()
+            fetchMerchantsData()
         }, 500)
         return () => clearTimeout(timer)
     }, [provinceFilter, districtFilter])
@@ -177,56 +176,10 @@ export default function MerchantsPage() {
         return true
     })
 
-    const fetchData = async () => {
-        setLoading(true)
-        try {
-            const params: any = {}
-            if (provinceFilter !== "ALL") params.province = provinceFilter
-            if (districtFilter) params.district = districtFilter
-
-            const [resMerchants, resMarkets] = await Promise.all([
-                api.get("/merchants/", { params }),
-                api.get("/markets/")
-            ])
-            setMerchants(resMerchants.data)
-            setMarkets(resMarkets.data)
-        } catch (error) {
-            console.error("Error fetching data:", error)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const filteredMerchants = merchants.filter((m: Merchant) => {
-        // Tab Filter
-        if (activeTab !== "ALL" && m.merchant_type !== activeTab) return false
-
-        // Search Filter
-        const searchLower = search.toLowerCase()
-        const matchesSearch =
-            m.full_name.toLowerCase().includes(searchLower) ||
-            m.phone_number?.includes(searchLower) ||
-            m.nfc_uid?.toLowerCase().includes(searchLower) ||
-            m.id.toString().includes(searchLower)
-
-        if (!matchesSearch) return false
-
-        // Market Filter
-        if (marketFilter !== "ALL" && m.market_id?.toString() !== marketFilter) return false
-
-        // Status Filter
-        if (statusFilter !== "ALL" && m.status !== statusFilter) return false
-
-        // Payment Status Filter
-        if (paymentStatusFilter !== "ALL" && m.payment_status !== paymentStatusFilter) return false
-
-        return true
-    })
-
     const getStatusColor = (status: string) => {
         switch (status) {
             case "ATIVO": return "success";
-            case "SUSPENSO": return "destructive"; // Use destructive for warning/suspension visual
+            case "SUSPENSO": return "destructive";
             case "BLOQUEADO": return "destructive";
             case "INATIVO": return "secondary";
             default: return "secondary";
@@ -271,7 +224,7 @@ export default function MerchantsPage() {
                 title="Comerciantes"
                 subtitle="Gestão completa de comerciantes fixos e ambulantes"
                 actions={
-                    <CreateMerchantDialog onSuccess={fetchData}>
+                    <CreateMerchantDialog onSuccess={fetchMerchantsData}>
                         <Button className="bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20">
                             <Plus className="mr-2 h-4 w-4" /> Novo Comerciante
                         </Button>
@@ -438,7 +391,6 @@ export default function MerchantsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-sm text-slate-600">
-                                                {/* Requires enriched Market Name or lookup */}
                                                 {markets.find(m => m.id === merchant.market_id)?.name || merchant.market_id || "N/A"}
                                             </TableCell>
                                             <TableCell>
@@ -462,7 +414,6 @@ export default function MerchantsPage() {
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            {/* Payment Status Column */}
                                             <TableCell>
                                                 {merchant.payment_status === "IRREGULAR" ? (
                                                     <div className="flex flex-col items-start">
@@ -504,10 +455,12 @@ export default function MerchantsPage() {
                                                             </DropdownMenuItem>
                                                         )}
 
-                                                        <DropdownMenuItem onClick={() => openDateDialog(merchant)}>
-                                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                                            <span>Alterar Início Cobrança</span>
-                                                        </DropdownMenuItem>
+                                                        {user?.role === "ADMIN" && (
+                                                            <DropdownMenuItem onClick={() => openDateDialog(merchant)}>
+                                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                <span>Alterar Início Cobrança</span>
+                                                            </DropdownMenuItem>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -529,6 +482,41 @@ export default function MerchantsPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <CreateMerchantDialog onSuccess={fetchMerchantsData} />
+
+            <Dialog open={!!editingDateMerchant} onOpenChange={(open) => !open && setEditingDateMerchant(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Alterar Início de Cobrança</DialogTitle>
+                        <DialogDescription>
+                            Defina a data a partir da qual as taxas diárias (10 MT) começam a ser calculadas para <b>{editingDateMerchant?.full_name}</b>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="startDate" className="text-right">Início</Label>
+                            <Input
+                                id="startDate"
+                                type="date"
+                                value={newStartDate}
+                                onChange={(e) => setNewStartDate(e.target.value)}
+                                className="col-span-3"
+                            />
+                        </div>
+                        <p className="text-sm text-slate-500 text-center">
+                            Taxas anteriores a esta data serão ignoradas.
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingDateMerchant(null)}>Cancelar</Button>
+                        <Button onClick={handleUpdateDate} disabled={updatingDate}>
+                            {updatingDate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Salvar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

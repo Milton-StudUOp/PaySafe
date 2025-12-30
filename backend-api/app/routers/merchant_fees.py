@@ -2,7 +2,7 @@
 Merchant Fee Management API
 Endpoints para gerenciar taxas diárias dos comerciantes (10 MT/dia)
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List
@@ -222,7 +222,7 @@ async def get_fee_history(
 @router.post("/run-check", status_code=status.HTTP_200_OK)
 async def trigger_payment_check(
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_active_user),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -245,7 +245,7 @@ async def trigger_payment_check(
 async def update_billing_start_date(
     merchant_id: int,
     start_date: date = Body(..., embed=True),
-    current_user: User = Depends(get_current_active_user),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
