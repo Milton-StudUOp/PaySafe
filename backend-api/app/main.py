@@ -2,9 +2,11 @@ from fastapi import FastAPI, Depends # force reload
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from contextlib import asynccontextmanager
 from app.config import settings
 from app.routers import api_router
 from app.database import get_db
+from app.tasks import start_scheduler, stop_scheduler
 from datetime import datetime
 import platform
 import sys
@@ -17,6 +19,17 @@ setup_logging()
 # App startup time for uptime calculation
 APP_START_TIME = datetime.now()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle events."""
+    # Startup
+    start_scheduler()
+    yield
+    # Shutdown
+    stop_scheduler()
+
+
 app = FastAPI(
     title="Paysafe POS API",
     description="API para sistema POS Paysafe (H10P/Sunmi)",
@@ -24,6 +37,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 # Configuração CORS

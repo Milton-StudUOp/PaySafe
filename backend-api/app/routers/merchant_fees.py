@@ -217,3 +217,31 @@ async def get_fee_history(
     )
     
     return result.scalars().all()
+
+
+@router.post("/run-check")
+async def run_payment_check_manually(
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Admin trigger manual do job de verificação de pagamentos.
+    Normalmente roda à meia-noite automaticamente.
+    """
+    # Apenas ADMIN pode executar manualmente
+    if current_user.role.value != "ADMIN":
+        raise HTTPException(
+            status_code=403, 
+            detail="Apenas ADMIN pode executar verificação manual"
+        )
+    
+    from app.tasks import run_payment_check_now
+    
+    try:
+        await run_payment_check_now()
+        return {"message": "Verificação de pagamentos executada com sucesso"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao executar verificação: {str(e)}"
+        )
+
