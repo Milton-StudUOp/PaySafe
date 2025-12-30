@@ -10,7 +10,6 @@ echo "  PAYSAFE BACKEND - PRODUCTION STARTUP (LINUX)"
 echo "=================================================="
 
 # Configuration
-# Workers = (2 * CPU_CORES) + 1. Adjust as needed.
 WORKERS=${WORKERS:-9}
 PORT=${PORT:-8000}
 HOST=${HOST:-0.0.0.0}
@@ -27,19 +26,20 @@ echo "✅ Dependencies installed"
 echo ""
 echo "Step 2: Running database migrations..."
 echo "-------------------------------------------"
-if [ -f "migrations/001_add_payment_status.sql" ]; then
-    # Check if DATABASE_URL is set
-    if [ -n "$DATABASE_URL" ]; then
-        echo "Executing migration via DATABASE_URL..."
-        psql "$DATABASE_URL" -f migrations/001_add_payment_status.sql 2>/dev/null || echo "⚠️ Migration may already be applied or failed"
-    else
-        echo "⚠️ DATABASE_URL not set - skipping automatic migration"
-        echo "   Run manually: psql -f migrations/001_add_payment_status.sql"
-    fi
+# Parse MySQL connection from DATABASE_URL or use defaults
+MYSQL_USER=${MYSQL_USER:-paysafe}
+MYSQL_PASS=${MYSQL_PASS:-senha123}
+MYSQL_HOST=${MYSQL_HOST:-localhost}
+MYSQL_DB=${MYSQL_DB:-paysafe_db}
+
+# Run MySQL migration if file exists
+if [ -f "migrations/001_add_payment_status_mysql.sql" ]; then
+    echo "Running migration: 001_add_payment_status_mysql.sql"
+    mysql -u"$MYSQL_USER" -p"$MYSQL_PASS" -h"$MYSQL_HOST" "$MYSQL_DB" < migrations/001_add_payment_status_mysql.sql 2>&1 || echo "⚠️ Migration may already be applied"
+    echo "✅ Migration complete"
 else
-    echo "No pending migrations found"
+    echo "No migration files found"
 fi
-echo "✅ Migration step complete"
 
 echo ""
 echo "Step 3: Starting Gunicorn server..."
@@ -49,12 +49,6 @@ echo "Address: $HOST:$PORT"
 echo ""
 
 # Start Gunicorn
-# -w: Number of workers
-# -k: Worker class (Uvicorn)
-# --timeout: Worker timeout (120s for slow mobile connections)
-# --access-logfile: Access logs path
-# --error-logfile: Error logs path
-
 exec gunicorn app.main:app \
     -w $WORKERS \
     -k uvicorn.workers.UvicornWorker \
