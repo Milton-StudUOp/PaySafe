@@ -1337,6 +1337,81 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  /// Builds payment status badge for merchant (REGULAR/IRREGULAR)
+  Widget _buildPaymentStatusBadge() {
+    final merchant = _selectedMerchant;
+    if (merchant == null) return const SizedBox.shrink();
+
+    final paymentStatus =
+        merchant['payment_status']?.toString().toUpperCase() ?? 'REGULAR';
+    final daysOverdue = merchant['days_overdue'] ?? 0;
+
+    if (paymentStatus == 'IRREGULAR') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              LucideIcons.alertTriangle,
+              size: 14,
+              color: Colors.red.shade700,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Irregular',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.red.shade700,
+              ),
+            ),
+            if (daysOverdue > 0) ...[
+              const SizedBox(width: 4),
+              Text(
+                '($daysOverdue dia${daysOverdue > 1 ? 's' : ''})',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: Colors.red.shade500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // REGULAR status - green badge
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.checkCircle, size: 14, color: Colors.green.shade700),
+          const SizedBox(width: 4),
+          Text(
+            'Regular',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.green.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAmountStep() {
     return Column(
       children: [
@@ -1351,6 +1426,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   _selectedMerchant?['full_name'] ?? "Comerciante",
                   style: GoogleFonts.inter(color: Colors.grey),
                 ),
+                const SizedBox(height: 8),
+                // Payment Status Badge
+                _buildPaymentStatusBadge(),
                 const SizedBox(height: 16),
                 Text(
                   _amountController.text.isEmpty
