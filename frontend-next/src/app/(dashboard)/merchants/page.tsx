@@ -15,18 +15,28 @@ import { Button } from "@/components/ui/button"
 import Header from "@/components/layout/Header"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, Loader2, Filter, Eye, MoreHorizontal, FileText, Download } from "lucide-react"
+import { Plus, Search, Loader2, Filter, Eye, MoreHorizontal, FileText, Download, CheckCircle } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { CreateMerchantDialog } from "@/components/forms/CreateMerchantDialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StatusBadge } from "@/components/StatusBadge"
 import Link from "next/link"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
 
 export default function MerchantsPage() {
     const [merchants, setMerchants] = useState<Merchant[]>([])
     const [markets, setMarkets] = useState<Market[]>([])
     const [loading, setLoading] = useState(true)
+    const { toast } = useToast()
 
     // Filters
     const [search, setSearch] = useState("")
@@ -36,6 +46,27 @@ export default function MerchantsPage() {
     const [paymentStatusFilter, setPaymentStatusFilter] = useState("ALL")
     const [provinceFilter, setProvinceFilter] = useState("ALL")
     const [districtFilter, setDistrictFilter] = useState("")
+
+    // Handler to set merchant as Regular
+    const setMerchantRegular = async (merchantId: number, merchantName: string) => {
+        try {
+            await api.put(`/merchant-fees/${merchantId}/set-regular`, {
+                notes: "Marcado como regular pelo admin via dashboard"
+            })
+            toast({
+                title: "Sucesso",
+                description: `${merchantName} foi marcado como Regular`,
+            })
+            // Reload data to reflect changes
+            fetchData()
+        } catch {
+            toast({
+                title: "Erro",
+                description: "Não foi possível alterar o estado de pagamento",
+                variant: "destructive"
+            })
+        }
+    }
 
     useEffect(() => {
         // Debounce for text inputs potentially, but for now direct call or simple debounce
@@ -353,15 +384,31 @@ export default function MerchantsPage() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <div className="flex justify-end items-center gap-1">
-                                                    <Link href={`/merchants/${merchant.id}`}>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-emerald-600">
-                                                            <Eye className="h-4 w-4" />
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700">
+                                                            <MoreHorizontal className="h-4 w-4" />
                                                         </Button>
-                                                    </Link>
-                                                    {/* Placeholder for Edit/More Actions */}
-                                                    {/* In future, this could be a dropdown */}
-                                                </div>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                                        <DropdownMenuSeparator />
+                                                        <Link href={`/merchants/${merchant.id}`}>
+                                                            <DropdownMenuItem>
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                Ver Detalhes
+                                                            </DropdownMenuItem>
+                                                        </Link>
+                                                        {merchant.payment_status === "IRREGULAR" && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => setMerchantRegular(merchant.id, merchant.full_name)}
+                                                            >
+                                                                <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                                                Marcar como Regular
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))}
