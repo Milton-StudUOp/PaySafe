@@ -5,9 +5,10 @@ Runs background jobs like daily fee checks
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from datetime import date, datetime, timedelta
 import logging
+import math
 
 from app.database import SessionLocal
 from app.models import Merchant, PaymentStatus, MerchantFeePayment
@@ -25,11 +26,13 @@ async def check_daily_payments():
     """
     Scheduled job that runs at midnight (00:00).
     
-    1. For each merchant, check if they paid today's fee
-    2. If not paid, mark as IRREGULAR and increment days_overdue
-    3. Log results for monitoring
+    Logic:
+    1. Calculate total expected amount = (days since registration until yesterday) * 10 MT
+    2. Sum total payments made by merchant
+    3. If Total Paid >= Expected -> REGULAR
+    4. If Total Paid < Expected -> IRREGULAR (overdue by diff)
     """
-    logger.info("🕐 Starting daily payment check job...")
+    logger.info("🕐 Starting daily payment check job (Cumulative)...")
     
     async with SessionLocal() as db:
         try:
@@ -44,41 +47,61 @@ async def check_daily_payments():
             
             regular_count = 0
             irregular_count = 0
-            newly_irregular = 0
             
             for merchant in merchants:
-                # Check if merchant paid yesterday (since this runs at midnight)
-                payment_result = await db.execute(
-                    select(MerchantFeePayment)
-                    .where(MerchantFeePayment.merchant_id == merchant.id)
-                    .where(MerchantFeePayment.payment_date >= datetime.combine(yesterday, datetime.min.time()))
-                    .where(MerchantFeePayment.payment_date < datetime.combine(today, datetime.min.time()))
-                    .where(MerchantFeePayment.amount > 0)  # Exclude admin adjustments with 0
-                )
-                payment = payment_result.scalar_one_or_none()
+                # 1. Calculate Expected Amount
+                # If registered_at is None, assume today (shouldn't happen for valid merchants)
+                reg_date = merchant.registered_at.date() if merchant.registered_at else today
                 
-                if payment:
-                    # Merchant paid - ensure they're REGULAR
+                # If registered after yesterday, they owe nothing yet for the period ending yesterday
+                # (Fee applies after the day is completed? Or prepaid? Assuming post-paid or checks past days)
+                # "since registration day until yesterday" implies:
+                # If reg=Jan1, yesterday=Jan2. Days=2 (Jan1, Jan2). Expected = 20.
+                
+                if reg_date > yesterday:
+                    days_billed = 0
+                else:
+                    days_billed = (yesterday - reg_date).days + 1
+                
+                expected_amount = days_billed * DAILY_FEE_AMOUNT
+                
+                # 2. Calculate Total Paid
+                # Limit to payments made until today's execution (though unlikely they paid in future)
+                payment_result = await db.execute(
+                    select(func.sum(MerchantFeePayment.amount))
+                    .where(MerchantFeePayment.merchant_id == merchant.id)
+                )
+                # scalar() returns None if no rows, likely 0 if rows but null sum? 
+                # SQLAlchemy sum returns None if no matches usually.
+                total_paid = payment_result.scalar() or 0.0
+                total_paid = float(total_paid)
+                
+                # 3. Compare
+                balance = total_paid - expected_amount
+                
+                if balance >= 0:
+                    # ✅ REGULAR (Paid enough or in advance)
                     if merchant.payment_status != PaymentStatus.REGULAR:
                         merchant.payment_status = PaymentStatus.REGULAR
                         merchant.days_overdue = 0
+                        logger.info(f"Merchant {merchant.id} became REGULAR (Paid: {total_paid}, Exp: {expected_amount})")
                     regular_count += 1
                 else:
-                    # Merchant didn't pay - mark as IRREGULAR
-                    if merchant.payment_status == PaymentStatus.REGULAR:
-                        newly_irregular += 1
-                    
+                    # ⚠️ IRREGULAR (Owes money)
                     merchant.payment_status = PaymentStatus.IRREGULAR
-                    merchant.days_overdue = (merchant.days_overdue or 0) + 1
+                    overdue_amount = abs(balance)
+                    # Calculate days overdue based on missing amount
+                    merchant.days_overdue = math.ceil(overdue_amount / DAILY_FEE_AMOUNT)
+                    
+                    logger.info(f"Merchant {merchant.id} marked IRREGULAR (Paid: {total_paid}, Exp: {expected_amount}, Overdue: {merchant.days_overdue} days)")
                     irregular_count += 1
             
             await db.commit()
             
             logger.info(f"✅ Daily payment check complete:")
             logger.info(f"   - Total merchants checked: {len(merchants)}")
-            logger.info(f"   - Regular (paid): {regular_count}")
-            logger.info(f"   - Irregular (unpaid): {irregular_count}")
-            logger.info(f"   - Newly irregular today: {newly_irregular}")
+            logger.info(f"   - Regular: {regular_count}")
+            logger.info(f"   - Irregular: {irregular_count}")
             
         except Exception as e:
             logger.error(f"❌ Error in daily payment check: {e}")
