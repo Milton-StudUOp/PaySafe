@@ -30,11 +30,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _loadSettings() {
-    if (AppConstants.isUsingCustomServer) {
-      _serverUrlController.text = AppConstants.customServerUrl ?? '';
-    } else {
-      _serverUrlController.text = AppConstants.defaultBaseUrl;
+    final currentUrl = AppConstants.baseUrl;
+    final template = AppConstants.urlTemplate;
+
+    // If current URL is exactly the template, it means no custom server is set
+    if (currentUrl == template) {
+      _serverUrlController.text = '';
+      return;
     }
+
+    // Attempt to extract IP from the current URL based on the template structure
+    // Template: http://{server}:8000/api/v1
+    // We strip the known parts.
+    // Note: This simple logic assumes the standard template modifications only.
+    String ip = currentUrl;
+    if (ip.startsWith('http://')) {
+      ip = ip.substring(7);
+    }
+    final suffixIndex = ip.indexOf(':8000/api/v1');
+    if (suffixIndex != -1) {
+      ip = ip.substring(0, suffixIndex);
+    }
+    _serverUrlController.text = ip;
+  }
+
+  String _constructFullUrl(String ip) {
+    ip = ip.trim();
+    if (ip.isEmpty) return AppConstants.urlTemplate;
+
+    // Inject IP into template
+    return AppConstants.urlTemplate.replaceFirst('{server}', ip);
   }
 
   @override
@@ -54,8 +79,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _feedback.lightHaptic();
 
     try {
-      // Temporarily set the URL to test
-      final testUrl = _serverUrlController.text.trim();
+      // Construct full URL
+      final ip = _serverUrlController.text.trim();
+      final testUrl = _constructFullUrl(ip);
+
       final connectivity = ConnectivityService();
 
       // Save current URL
@@ -69,6 +96,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Restore original URL
       if (originalUrl != testUrl) {
+        // Revert to original text in field (which is IP)
+        // But the underlying setting must be restored
         if (AppConstants.isUsingCustomServer) {
           await AppConstants.setServerUrl(originalUrl);
         } else {
@@ -81,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _connectionTestSuccess = isConnected;
         _connectionTestMessage = isConnected
             ? 'Conexão bem sucedida!'
-            : 'Não foi possível conectar ao servidor';
+            : 'Não foi possível conectar a $ip';
       });
 
       if (isConnected) {
@@ -102,12 +131,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveSettings() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final url = _serverUrlController.text.trim();
+    final ip = _serverUrlController.text.trim();
+    final fullUrl = _constructFullUrl(ip);
 
-    if (url == AppConstants.defaultBaseUrl) {
+    // If matches default template, just reset
+    if (fullUrl == AppConstants.urlTemplate) {
       await AppConstants.resetServerUrl();
     } else {
-      await AppConstants.setServerUrl(url);
+      await AppConstants.setServerUrl(fullUrl);
     }
 
     await _feedback.successFeedback();
@@ -119,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _resetToDefault() async {
     await AppConstants.resetServerUrl();
-    _serverUrlController.text = AppConstants.defaultBaseUrl;
+    _loadSettings(); // Reloads default IP into field
     await _feedback.lightHaptic();
 
     setState(() {
@@ -127,27 +158,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     if (mounted) {
-      UIUtils.showInfoSnackBar(context, 'URL restaurado para o padrão');
+      UIUtils.showInfoSnackBar(context, 'Endereço restaurado para o padrão');
     }
   }
 
   String? _validateUrl(String? value) {
     if (value == null || value.isEmpty) {
-      return 'URL é obrigatório';
+      return 'Endereço IP é obrigatório';
     }
-
-    try {
-      final uri = Uri.parse(value);
-      if (!uri.hasScheme || (!uri.scheme.startsWith('http'))) {
-        return 'URL deve começar com http:// ou https://';
-      }
-      if (!uri.hasAuthority) {
-        return 'URL inválido';
-      }
-    } catch (e) {
-      return 'URL inválido';
+    // Basic IP/Host validation (loose)
+    if (value.contains('http') || value.contains('/')) {
+      return 'Insira apenas o IP ou Hostname (sem http://)';
     }
-
     return null;
   }
 
@@ -225,7 +247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     Text(
-                      'URL do Servidor API',
+                      'Endereço IP do Servidor',
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -239,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       validator: _validateUrl,
                       style: GoogleFonts.robotoMono(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'http://servidor:8000/api/v1',
+                        hintText: 'Ex: 192.168.1.10',
                         hintStyle: GoogleFonts.robotoMono(
                           fontSize: 14,
                           color: const Color(0xFF94A3B8),

@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Supports remote server configuration via settings.
 class AppConstants {
   // Default server URL - can be overridden via settings
-  static const String _defaultBaseUrl = "http://10.136.41.109:8000/api/v1";
+  // Using template placeholder {server}
+  static const String _defaultBaseUrl = "http://{server}:8000/api/v1";
 
   // App version - displayed in splash screen
   static const String appVersion = "1.0.0";
@@ -17,11 +18,11 @@ class AppConstants {
   static String? _cachedServerUrl;
 
   /// Get the current base URL.
-  /// Returns custom URL if configured, otherwise default.
+  /// Returns custom URL if configured, otherwise default template.
   static String get baseUrl => _cachedServerUrl ?? _defaultBaseUrl;
 
-  /// Get the default base URL (for display in settings).
-  static String get defaultBaseUrl => _defaultBaseUrl;
+  /// Get the URL template for configuration
+  static String get urlTemplate => _defaultBaseUrl;
 
   /// Initialize constants - call this at app startup.
   static Future<void> initialize() async {
