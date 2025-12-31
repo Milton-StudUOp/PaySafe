@@ -342,10 +342,23 @@ async def export_transactions(
 @router.post("/", response_model=Transaction, status_code=status.HTTP_201_CREATED)
 async def create_transaction(transaction: TransactionCreate, db: AsyncSession = Depends(get_db)):
     data = transaction.model_dump()
-    data["transaction_uuid"] = str(uuid.uuid4())
+    
+    # Use client-provided UUID if available (for offline sync), otherwise generate new one
+    if transaction.client_transaction_uuid:
+        data["transaction_uuid"] = transaction.client_transaction_uuid
+    else:
+        data["transaction_uuid"] = str(uuid.uuid4())
+    
+    # Parse offline_created_at from ISO string to datetime if present
+    if data.get('offline_created_at') and isinstance(data['offline_created_at'], str):
+        try:
+            data['offline_created_at'] = datetime.fromisoformat(data['offline_created_at'].replace('Z', '+00:00'))
+        except ValueError:
+            data['offline_created_at'] = None
     
     # Remove fields not in TransactionModel
     data.pop('nfc_uid', None)
+    data.pop('client_transaction_uuid', None)  # Remove before creating model
     
     db_tx = TransactionModel(**data)
     db.add(db_tx)

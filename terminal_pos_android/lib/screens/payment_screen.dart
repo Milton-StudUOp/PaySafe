@@ -279,8 +279,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _goToMethodSelection() {
     if (_amountController.text.isEmpty ||
-        double.tryParse(_amountController.text) == 0)
+        double.tryParse(_amountController.text) == 0) {
       return;
+    }
     setState(() => _currentStep = 'METHOD');
   }
 
@@ -417,11 +418,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
           agentName: agentData?['name'] ?? 'Agente',
           posId: deviceData?['id'],
           merchantTempId: merchantTempId, // For sync ID resolution
+          merchant:
+              _selectedMerchant, // Full merchant data for receipt NFC display
         );
 
-        // Generate offline receipt
+        // Get the queued payment to retrieve the generated UUID and reference
+        final queuedPayments = await _offlineQueue.getQueuedPayments();
+        final queuedPayment = queuedPayments.lastWhere(
+          (p) => p['temp_id'] == tempId,
+          orElse: () => <String, dynamic>{},
+        );
+
+        // Generate offline receipt with consistent UUID and reference from queue
         final receiptData = _offlineQueue.generateOfflineReceipt(
           tempId: tempId,
+          transactionUuid: queuedPayment['transaction_uuid'] ?? '',
+          paymentReference: queuedPayment['payment_reference'] ?? '',
           merchantName: _selectedMerchant?['full_name'] ?? 'Comerciante',
           amount: amount,
           agentName: agentData?['name'] ?? 'Agente',
@@ -643,7 +655,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        methodLabel!,
+                        methodLabel,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -1055,7 +1067,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
                 // Market Dropdown (from agent jurisdiction)
                 DropdownButtonFormField<Map<String, dynamic>>(
-                  value: selectedMarket,
+                  initialValue: selectedMarket,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: "Mercado / Local *",

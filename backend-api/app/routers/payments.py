@@ -28,6 +28,9 @@ class PaymentRequest(BaseModel):
     nfc_uid: Optional[str] = None
     # For offline payments: preserve original transaction date
     offline_created_at: Optional[str] = Field(default=None, description="Original ISO datetime for offline payments")
+    # Offline Audit Fields: preserve client-generated identifiers
+    offline_transaction_uuid: Optional[str] = Field(default=None, description="UUID generated on POS device")
+    offline_payment_reference: Optional[str] = Field(default=None, description="Reference generated on POS device (PS-YYYYMMDD-XXXXXX)")
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def initiate_payment(
@@ -147,6 +150,10 @@ async def initiate_payment(
         mpesa_reference=None, # Filled later
         province=market.province, # Snapshot location
         district=market.district,
+        # Offline Audit Fields - preserve client-generated values
+        offline_transaction_uuid=payment.offline_transaction_uuid,
+        offline_payment_reference=payment.offline_payment_reference,
+        offline_created_at=tx_created_at,  # Already parsed above
         request_payload={"msisdn": payment.mpesa_number, "obs": payment.observation, "method": payment.payment_method, "is_offline_sync": payment.offline_created_at is not None}
     )
     # Override created_at if this is an offline sync

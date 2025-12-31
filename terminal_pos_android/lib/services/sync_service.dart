@@ -185,10 +185,12 @@ class SyncService {
   ///
   /// Steps:
   /// 1. UPLOAD: Send all pending offline data to server
-  /// 2. CLEAR: Remove all synced items from queues AND clear caches
-  /// 3. DOWNLOAD: Get fresh data from server
+  /// 2. CLEANUP: Remove synced items from offline queues
+  /// 3. DOWNLOAD: Get fresh data from server (cache is cleared ONLY on success)
   ///
-  /// This ensures data consistency and prevents stale cache issues.
+  /// IMPORTANT: Cache is NOT cleared before download. Each sync function
+  /// clears its own cache only AFTER successfully receiving fresh data.
+  /// This prevents data loss if the server/DB becomes unavailable mid-sync.
   Future<SyncResult> performFullOnlineSync({
     required Function(String status) onStatusUpdate,
   }) async {
@@ -215,7 +217,9 @@ class SyncService {
       final offlinePaymentResult = await syncOfflinePayments();
       debugPrint('   Result: ${offlinePaymentResult.message}');
 
-      // ========== STEP 2: CLEAR ALL SYNCED DATA ==========
+      // ========== STEP 2: CLEAR SYNCED ITEMS FROM QUEUES ==========
+      // Note: We do NOT clear caches here anymore - that's done by each sync
+      // function AFTER successful download to prevent data loss on DB failure
       onStatusUpdate('Limpando dados sincronizados...');
 
       debugPrint('🗑️ Step 2a: Clearing synced registrations...');
@@ -227,14 +231,14 @@ class SyncService {
       debugPrint('🗑️ Step 2c: Clearing synced payments...');
       await _offlineQueue.removeSyncedPayments();
 
-      debugPrint('🗑️ Step 2d: Clearing all caches...');
-      await clearCachesForRefresh();
-
       // Verify queues are empty
       final pendingCount = await _offlineMerchantQueue.getPendingCount();
-      debugPrint('✅ Cleanup complete. Remaining pending items: $pendingCount');
+      debugPrint(
+        '✅ Queue cleanup complete. Remaining pending items: $pendingCount',
+      );
 
       // ========== STEP 3: DOWNLOAD FRESH DATA ==========
+      // Each sync function clears its cache ONLY after successful API response
       onStatusUpdate('Baixando dados atualizados do servidor...');
 
       debugPrint('📥 Step 3a: Downloading merchants...');
@@ -264,6 +268,8 @@ class SyncService {
       );
     } catch (e) {
       debugPrint('❌ FULL ONLINE SYNC FAILED: $e');
+      // IMPORTANT: If sync fails, the old cache data is preserved
+      debugPrint('📦 Old cache data was preserved due to sync failure.');
       return SyncResult(
         success: false,
         message:
@@ -676,16 +682,20 @@ class SyncService {
         }
 
         try {
-          // Build transaction request with original offline date
+          // Build transaction request with all required fields for /payments/ endpoint
           final txData = {
             'merchant_id': payment['merchant_id'],
             'pos_id': payment['pos_id'],
             'amount': payment['amount'],
             'payment_method': 'DINHEIRO',
-            'mpesa_number': '820000000', // Placeholder for cash
+            // Required by PaymentRequest schema in payments.py
+            'mpesa_number':
+                '820000000', // Placeholder for cash payments (pattern: 8[234567]XXXXXXX)
             'observation':
-                'Pagamento offline sincronizado - ${payment['temp_id']}',
-            // Preserve original transaction date from offline payment
+                'Pagamento em dinheiro offline - ${payment['temp_id']}',
+            // Offline Audit Fields - stored in DB for audit trail
+            'offline_transaction_uuid': payment['transaction_uuid'],
+            'offline_payment_reference': payment['payment_reference'],
             'offline_created_at': payment['created_at'],
           };
 
@@ -702,11 +712,20 @@ class SyncService {
           await _offlineQueue.markAsSynced(payment['temp_id'], serverTxId);
 
           // ADD TO TRANSACTION CACHE: Update local cache with synced transaction
+          // IMPORTANT: Preserve original offline UUID and payment_reference
+          // so receipts remain consistent after sync
           final syncedTx = {
             ...response,
+            // Override with original values from offline payment
+            'transaction_uuid':
+                payment['transaction_uuid'] ?? response['transaction_uuid'],
+            'payment_reference':
+                payment['payment_reference'] ?? response['payment_reference'],
             'synced': true,
             'synced_from_offline': true,
             'original_offline_id': payment['temp_id'],
+            // Ensure no M-Pesa reference for cash payments
+            'mpesa_reference': null,
           };
           await _transactionCache.addTransaction(syncedTx);
 

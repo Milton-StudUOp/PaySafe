@@ -33,7 +33,14 @@ class TransactionBase(BaseModel):
     district: Optional[str] = None
 
 class TransactionCreate(TransactionBase):
-    pass
+    # Optional: Client-provided UUID for offline transactions
+    # If provided, backend will use this instead of generating a new one
+    client_transaction_uuid: Optional[str] = None
+    
+    # Offline Sync Audit Fields
+    offline_transaction_uuid: Optional[str] = None  # UUID generated on POS device
+    offline_payment_reference: Optional[str] = None  # Reference generated on POS device
+    offline_created_at: Optional[str] = None  # Original timestamp (ISO format)
 
 class TransactionUpdate(BaseModel):
     status: Optional[TransactionStatus] = None

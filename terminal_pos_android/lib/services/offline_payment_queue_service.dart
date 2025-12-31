@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 /// Service for queuing offline payments that will be synced when online.
 /// Only supports DINHEIRO (cash) payments in offline mode.
@@ -8,10 +9,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 class OfflinePaymentQueueService {
   static const String _queueKey = 'offline_payment_queue';
   static const String _pendingCountKey = 'offline_pending_count';
+  static const _uuid = Uuid();
+
+  /// Generate a professional payment reference.
+  /// Format: PS-YYYYMMDD-XXXXXX (e.g., PS-20231231-A7B3C9)
+  String _generatePaymentReference() {
+    final now = DateTime.now();
+    final dateStr =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final randomPart = _uuid.v4().substring(0, 6).toUpperCase();
+    return 'PS-$dateStr-$randomPart';
+  }
 
   /// Add a cash payment to the offline queue.
   /// Returns a temporary receipt ID for display.
   /// merchantTempId: If merchant was registered offline, store their temp ID for later resolution.
+  /// merchant: Full merchant object to preserve NFC and other data for receipt display.
   Future<String> queueCashPayment({
     required int merchantId,
     required String merchantName,
@@ -20,17 +33,25 @@ class OfflinePaymentQueueService {
     required String agentName,
     int? posId,
     String? merchantTempId, // For offline-registered merchants
+    Map<String, dynamic>? merchant, // Full merchant data for receipt display
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
     // Generate temporary ID
     final tempId = 'OFFLINE_${DateTime.now().millisecondsSinceEpoch}';
 
+    // Generate permanent UUID and payment reference that will persist after sync
+    final transactionUuid = _uuid.v4();
+    final paymentReference = _generatePaymentReference();
+
     // Create queued payment
     final payment = {
       'temp_id': tempId,
+      'transaction_uuid': transactionUuid, // Permanent UUID for receipt
+      'payment_reference': paymentReference, // Permanent reference for receipt
       'merchant_id': merchantId,
       'merchant_name': merchantName,
+      'merchant': merchant, // Full merchant data including NFC
       'merchant_temp_id':
           merchantTempId, // Store temp ID for resolution during sync
       'amount': amount,
@@ -169,14 +190,19 @@ class OfflinePaymentQueueService {
 
   /// Get receipt data for an offline payment.
   /// Shows as SUCESSO because the agent already received the cash.
+  /// Uses UUID and payment_reference from the queued payment for consistency.
   Map<String, dynamic> generateOfflineReceipt({
     required String tempId,
+    required String transactionUuid,
+    required String paymentReference,
     required String merchantName,
     required double amount,
     required String agentName,
   }) {
     return {
-      'transaction_uuid': tempId,
+      'transaction_uuid': transactionUuid,
+      'payment_reference': paymentReference,
+      'temp_id': tempId, // Keep temp_id for sync tracking
       'merchant_name': merchantName,
       'amount': amount,
       'payment_method': 'DINHEIRO',

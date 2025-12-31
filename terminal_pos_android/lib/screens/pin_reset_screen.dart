@@ -223,8 +223,9 @@ class _PinResetScreenState extends State<PinResetScreen> {
             controller: _currentPinController,
             label: "PIN Atual",
             validator: (value) {
-              if (value == null || value.length < 6)
+              if (value == null || value.length < 6) {
                 return "Digite seu PIN atual de 6 dígitos";
+              }
               return null;
             },
           ),
@@ -238,10 +239,12 @@ class _PinResetScreenState extends State<PinResetScreen> {
             controller: _newPinController,
             label: "Novo PIN",
             validator: (value) {
-              if (value == null || value.length < 6)
+              if (value == null || value.length < 6) {
                 return "O PIN deve ter 6 dígitos";
-              if (value == _currentPinController.text)
+              }
+              if (value == _currentPinController.text) {
                 return "O novo PIN deve ser diferente do atual";
+              }
               return null;
             },
           ),
@@ -253,8 +256,9 @@ class _PinResetScreenState extends State<PinResetScreen> {
             controller: _confirmPinController,
             label: "Confirmar Novo PIN",
             validator: (value) {
-              if (value != _newPinController.text)
+              if (value != _newPinController.text) {
                 return "Os PINs não coincidem";
+              }
               return null;
             },
           ),

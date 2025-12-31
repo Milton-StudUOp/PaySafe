@@ -138,9 +138,12 @@ const ReceiptTemplate = ({ tx, isPrintCopy = false }: { tx: Transaction, isPrint
                             <span>Ref. Interna:</span>
                             <span className="font-mono">{tx.payment_reference}</span>
                         </div>
-                        {tx.mpesa_reference && (
+                        {/* Only show M-Pesa/mobile reference for non-cash payments */}
+                        {tx.mpesa_reference && tx.payment_method !== 'DINHEIRO' && (
                             <div className="flex justify-between py-1 bg-orange-50/50 text-orange-900">
-                                <span>M-Pesa Ref:</span>
+                                <span>{tx.payment_method === 'MPESA' ? 'M-Pesa Ref:' :
+                                    tx.payment_method === 'EMOLA' ? 'E-Mola Ref:' :
+                                        tx.payment_method === 'MKESH' ? 'M-Kesh Ref:' : 'Ref. Móvel:'}</span>
                                 <span className="font-bold font-mono">{tx.mpesa_reference}</span>
                             </div>
                         )}

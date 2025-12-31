@@ -8,7 +8,6 @@ import '../services/transaction_service.dart';
 import '../services/transaction_cache_service.dart';
 import '../services/offline_payment_queue_service.dart';
 import '../services/auth_service.dart';
-import '../services/market_service.dart';
 import '../services/connectivity_service.dart'; // Added
 import 'dart:async';
 import 'receipt_screen.dart'; // To reprint logic
@@ -346,11 +345,17 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                             ],
                           ),
                           onTap: () async {
-                            // Navigate to Receipt (Reprint mode)
+                            // Navigate to Receipt IMMEDIATELY (don't block on API calls)
                             final receiptData = Map<String, dynamic>.from(tx);
                             receiptData['merchant_name'] = merchantName;
 
-                            // Get logged-in agent data (same as new payment flow)
+                            // Ensure merchant object with NFC is available
+                            if (tx['merchant'] != null) {
+                              receiptData['merchant'] =
+                                  Map<String, dynamic>.from(tx['merchant']);
+                            }
+
+                            // Get logged-in agent data synchronously from cache
                             final prefs = await SharedPreferences.getInstance();
                             final userDataString = prefs.getString('user_data');
                             if (userDataString != null) {
@@ -359,37 +364,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                               );
                             }
 
-                            // Fetch market data to enrich merchant info (fallback)
-                            final marketId = tx['merchant']?['market_id'];
-                            if (marketId != null) {
-                              final marketService = MarketService();
-                              final market = await marketService.getMarketById(
-                                marketId,
-                              );
-                              if (market != null) {
-                                // Ensure merchant object exists
-                                receiptData['merchant'] ??= {};
-                                (receiptData['merchant']
-                                        as Map<
-                                          String,
-                                          dynamic
-                                        >)['market_name'] =
-                                    market['name'];
-                                (receiptData['merchant']
-                                        as Map<
-                                          String,
-                                          dynamic
-                                        >)['market_district'] =
-                                    market['district'];
-                                (receiptData['merchant']
-                                        as Map<
-                                          String,
-                                          dynamic
-                                        >)['market_province'] =
-                                    market['province'];
-                              }
-                            }
-
+                            // Navigate FIRST - don't wait for market data
                             if (context.mounted) {
                               Navigator.push(
                                 context,
@@ -401,6 +376,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                 ),
                               );
                             }
+
+                            // Note: Market data enrichment is now skipped for instant loading
+                            // The receipt already has essential data from the transaction
                           },
                         ),
                       );

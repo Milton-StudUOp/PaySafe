@@ -379,7 +379,7 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
 
               // Market
               DropdownButtonFormField<Map<String, dynamic>>(
-                value: _selectedMarket,
+                initialValue: _selectedMarket,
                 isExpanded: true,
                 decoration: _inputDecoration("Mercado"),
                 items: _markets

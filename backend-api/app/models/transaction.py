@@ -45,6 +45,12 @@ class Transaction(Base):
     province = Column(String(100), nullable=True)
     district = Column(String(100), nullable=True)
     
+    # Offline Sync Audit Fields
+    # Stores original client-generated values for offline payments
+    offline_transaction_uuid = Column(String(36), nullable=True)  # UUID generated on POS device
+    offline_payment_reference = Column(String(100), nullable=True)  # Reference generated on POS device
+    offline_created_at = Column(TIMESTAMP, nullable=True)  # Original timestamp from offline payment
+    
     # Audit/Technical
     request_payload = Column(JSON, nullable=True)
     response_payload = Column(JSON, nullable=True)

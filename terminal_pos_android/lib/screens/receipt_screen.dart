@@ -276,9 +276,16 @@ class ReceiptScreen extends StatelessWidget {
                           _buildInfoRow("Data", dateFormat.format(date)),
                           _buildInfoRow("Método", method),
                           _buildInfoRow("Ref. Interna", ref),
-                          if (mpesaRef != null)
+                          // Only show M-Pesa/mobile money reference for non-cash payments
+                          if (mpesaRef != null && method != 'DINHEIRO')
                             _buildInfoRow(
-                              "M-Pesa Ref",
+                              method == 'MPESA'
+                                  ? "M-Pesa Ref"
+                                  : method == 'EMOLA'
+                                  ? "E-Mola Ref"
+                                  : method == 'MKESH'
+                                  ? "M-Kesh Ref"
+                                  : "Ref. Móvel",
                               mpesaRef,
                               valueColor: const Color(0xFFEA580C),
                             ),

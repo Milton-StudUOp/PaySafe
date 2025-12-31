@@ -117,8 +117,9 @@ class _MerchantRegistrationScreenState
   }
 
   bool _validatePrefix(String number, List<String> prefixes) {
-    if (number.isEmpty)
+    if (number.isEmpty) {
       return true; // Empty is valid (optional) unless required
+    }
     for (var p in prefixes) {
       if (number.startsWith(p)) return true;
     }
@@ -407,7 +408,7 @@ class _MerchantRegistrationScreenState
                     const SizedBox(height: 16),
                     // Market Dropdown
                     DropdownButtonFormField<int>(
-                      value: _selectedMarket?['id'],
+                      initialValue: _selectedMarket?['id'],
                       isExpanded: true,
                       decoration: _inputDecoration("Mercado / Local *"),
                       hint: const Text("Selecione o Mercado"),
@@ -536,7 +537,7 @@ class _MerchantRegistrationScreenState
                           Expanded(
                             flex: 1,
                             child: DropdownButtonFormField<String>(
-                              value: _idType,
+                              initialValue: _idType,
                               decoration: _inputDecoration("Tipo"),
                               items: ["BI", "PASSAPORTE", "DIRE", "OUTRO"]
                                   .map(
@@ -581,8 +582,9 @@ class _MerchantRegistrationScreenState
                       validator: (v) {
                         if (v != null &&
                             v.isNotEmpty &&
-                            !_validatePrefix(v, ['84', '85']))
+                            !_validatePrefix(v, ['84', '85'])) {
                           return "Deve começar com 84 ou 85";
+                        }
                         return null;
                       },
                     ),
@@ -595,8 +597,9 @@ class _MerchantRegistrationScreenState
                       validator: (v) {
                         if (v != null &&
                             v.isNotEmpty &&
-                            !_validatePrefix(v, ['86', '87']))
+                            !_validatePrefix(v, ['86', '87'])) {
                           return "Deve começar com 86 ou 87";
+                        }
                         return null;
                       },
                     ),
@@ -609,8 +612,9 @@ class _MerchantRegistrationScreenState
                       validator: (v) {
                         if (v != null &&
                             v.isNotEmpty &&
-                            !_validatePrefix(v, ['82', '83']))
+                            !_validatePrefix(v, ['82', '83'])) {
                           return "Deve começar com 82 ou 83";
+                        }
                         return null;
                       },
                     ),
