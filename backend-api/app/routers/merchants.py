@@ -82,7 +82,25 @@ async def list_merchants(
         query = query.where(MerchantModel.id == -1)
 
     result = await db.execute(query.offset(skip).limit(limit))
-    return result.scalars().all()
+    merchants = result.scalars().all()
+    
+    # Real-time Fee Validation
+    from app.services.fee_service import validate_merchant_payment_status
+    validated_merchants = []
+    for m in merchants:
+        # Validate effectively updates the object status if needed
+        # We await it sequentially (or gather)
+        # Sequential is safer for DB connection limit with many items, 
+        # though slower. For page size 100 it might be noticeable.
+        # But for correctness requested by user, we do it.
+        try:
+            val_m = await validate_merchant_payment_status(m, db)
+            validated_merchants.append(val_m)
+        except Exception:
+            # Fallback to existing if calc fails (shouldn't happen)
+            validated_merchants.append(m)
+            
+    return validated_merchants
 
 @router.post("/", response_model=Merchant, status_code=status.HTTP_201_CREATED)
 async def create_merchant(
@@ -298,6 +316,10 @@ async def get_merchant(
             setattr(merchant, "market_province", market.province)
             setattr(merchant, "market_district", market.district)
     
+    # Real-time Fee Validation
+    from app.services.fee_service import validate_merchant_payment_status
+    await validate_merchant_payment_status(merchant, db)
+
     return merchant
 
 @router.get("/nfc/{nfc_uid}", response_model=Merchant)
@@ -325,6 +347,10 @@ async def get_merchant_by_nfc(
          # Hide existence if out of jurisdiction? Or 403? 
          # 404 is safer to prevent probing.
          raise HTTPException(status_code=404, detail="Merchant with this NFC not found")
+         
+    # Real-time Fee Validation
+    from app.services.fee_service import validate_merchant_payment_status
+    await validate_merchant_payment_status(valid_merchant, db)
          
     return valid_merchant
 

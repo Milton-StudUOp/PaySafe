@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Enum, TIMESTAMP, Date, ForeignKey, func, Integer
+from sqlalchemy import Column, BigInteger, String, Enum, TIMESTAMP, Date, ForeignKey, func, Integer, Numeric
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -77,6 +77,8 @@ class Merchant(Base):
     last_fee_payment_date = Column(Date, nullable=True)  # Última data que pagou taxa
     billing_start_date = Column(Date, nullable=True)     # Data de início da cobrança (customizável)
     days_overdue = Column(Integer, default=0)  # Dias em atraso
+    overdue_balance = Column(Numeric(10, 2), default=0.00) # Valor exato em atraso
+    credit_balance = Column(Numeric(10, 2), default=0.00) # Valor excedente (crédito)
     
     # Datas
     registered_at = Column(TIMESTAMP, server_default=func.current_timestamp())

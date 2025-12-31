@@ -53,6 +53,8 @@ export interface Merchant {
     payment_status?: "REGULAR" | "IRREGULAR";
     last_fee_payment_date?: string;
     days_overdue?: number;
+    overdue_balance?: number; // Exact amount overdue
+    credit_balance?: number; // Surplus amount
 }
 
 export interface Agent {

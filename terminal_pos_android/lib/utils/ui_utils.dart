@@ -9,6 +9,11 @@ class UIUtils {
   static const Color slate900 = Color(0xFF0F172A);
   static const Color slate500 = Color(0xFF64748B);
 
+  /// Formats amount as currency (e.g. 1,250.00 MT)
+  static String formatCurrency(double amount) {
+    return '${amount.toStringAsFixed(2).replaceAll('.', ',')} MT';
+  }
+
   // --- Dialogs ---
 
   /// Shows a clean, centered success dialog

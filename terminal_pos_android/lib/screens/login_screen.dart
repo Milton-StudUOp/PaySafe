@@ -8,6 +8,7 @@ import '../services/device_service.dart';
 import '../services/inactivity_service.dart';
 import '../utils/ui_utils.dart';
 import 'dashboard_screen.dart';
+import 'settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialMessage;
@@ -124,6 +125,24 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Settings Button (Top Right)
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    icon: const Icon(LucideIcons.settings, color: slate500),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
+                    },
+                    tooltip: "Configurações",
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
                 // Logo or Header
                 Text(
                   "PAYSAFE",

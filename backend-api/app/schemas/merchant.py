@@ -87,6 +87,8 @@ class Merchant(MerchantBase):
     last_fee_payment_date: Optional[date] = None
     billing_start_date: Optional[date] = None
     days_overdue: Optional[int] = 0
+    overdue_balance: Optional[float] = 0.00
+    credit_balance: Optional[float] = 0.00
 
     class Config:
         from_attributes = True

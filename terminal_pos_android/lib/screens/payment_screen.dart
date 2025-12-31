@@ -1371,16 +1371,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 color: Colors.red.shade700,
               ),
             ),
-            if (daysOverdue > 0) ...[
-              const SizedBox(width: 4),
-              Text(
-                '($daysOverdue dia${daysOverdue > 1 ? 's' : ''})',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  color: Colors.red.shade500,
-                ),
+            const SizedBox(width: 4),
+            Text(
+              // Calculate debt: Prefer overdue_balance if available, else days * 10
+              '(${UIUtils.formatCurrency((merchant['overdue_balance'] != null && (merchant['overdue_balance'] as num) > 0) ? (merchant['overdue_balance'] as num).toDouble() : (daysOverdue * 10.0))} em atraso)',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                color: Colors.red.shade500,
               ),
-            ],
+            ),
           ],
         ),
       );
@@ -1400,7 +1399,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Icon(LucideIcons.checkCircle, size: 14, color: Colors.green.shade700),
           const SizedBox(width: 4),
           Text(
-            'Regular',
+            // Show Regular + Credit if applicable
+            (merchant['credit_balance'] != null &&
+                    (merchant['credit_balance'] as num) > 0)
+                ? 'Regular (+${UIUtils.formatCurrency((merchant['credit_balance'] as num).toDouble())})'
+                : 'Regular',
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,

@@ -15,6 +15,8 @@ interface MerchantStats {
     last_transaction_amount: number
     last_transaction_date: string | null
     status: string
+    payment_status: string // Added payment status
+    days_overdue: number
 }
 
 export default function MerchantDashboard() {
@@ -86,7 +88,11 @@ export default function MerchantDashboard() {
                     total_last_month: totalLastMonth,
                     last_transaction_amount: lastTxAmount,
                     last_transaction_date: lastTxDate,
-                    status: merchant.status || 'ATIVO'
+                    status: merchant.status || 'ATIVO',
+                    payment_status: merchant.payment_status || 'REGULAR', // Use backend status
+                    days_overdue: merchant.days_overdue || 0,
+                    overdue_balance: merchant.overdue_balance || 0,
+                    credit_balance: merchant.credit_balance || 0
                 })
             } catch (error) {
                 console.error("Erro ao carregar dados:", error)
@@ -97,7 +103,9 @@ export default function MerchantDashboard() {
                     total_last_month: 0,
                     last_transaction_amount: 0,
                     last_transaction_date: null,
-                    status: 'ATIVO'
+                    status: 'ATIVO',
+                    payment_status: 'REGULAR',
+                    days_overdue: 0
                 })
             } finally {
                 setLoading(false)
@@ -123,21 +131,26 @@ export default function MerchantDashboard() {
         return Math.round(((stats.total_this_month - stats.total_last_month) / stats.total_last_month) * 100)
     }
 
-    const translateStatus = (status: string) => {
+    const translatePaymentStatus = (status: string) => {
         const map: Record<string, string> = {
-            'ATIVO': 'Regular',
-            'INATIVO': 'Inativo',
-            'SUSPENSO': 'Suspenso',
-            'BLOQUEADO': 'Bloqueado'
+            'REGULAR': 'Regular',
+            'IRREGULAR': 'Irregular'
         }
         return map[status] || status
     }
 
-    const getStatusMessage = (status: string) => {
-        if (status === 'ATIVO') return 'Nenhuma pendência'
-        if (status === 'SUSPENSO') return 'Conta temporariamente suspensa'
-        if (status === 'BLOQUEADO') return 'Contacte o supervisor'
-        return 'Verifique sua situação'
+    const getPaymentStatusMessage = (status: string, overdueDays: number, overdueBalance: number, creditBalance: number = 0) => {
+        if (status === 'REGULAR') {
+            if (creditBalance > 0) {
+                return `Crédito: +${formatCurrency(creditBalance)} MZN`
+            }
+            return 'Nenhuma pendência'
+        }
+
+        // Use balance if available, otherwise fallback to days * 10
+        const debt = overdueBalance > 0 ? overdueBalance : overdueDays * 10
+
+        return `Valor em atraso: ${formatCurrency(debt)} MZN`
     }
 
     return (
@@ -212,18 +225,18 @@ export default function MerchantDashboard() {
                             </CardContent>
                         </Card>
 
-                        {/* Status */}
+                        {/* Status - Now showing PAYMENT STATUS */}
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Situação</CardTitle>
-                                <Activity className={`h-4 w-4 ${stats?.status === 'ATIVO' ? 'text-emerald-500' : 'text-red-500'}`} />
+                                <Activity className={`h-4 w-4 ${stats?.payment_status === 'REGULAR' ? 'text-emerald-500' : 'text-red-500'}`} />
                             </CardHeader>
                             <CardContent>
-                                <div className={`text-2xl font-bold ${stats?.status === 'ATIVO' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {translateStatus(stats?.status || 'ATIVO')}
+                                <div className={`text-2xl font-bold ${stats?.payment_status === 'REGULAR' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {translatePaymentStatus(stats?.payment_status || 'REGULAR')}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    {getStatusMessage(stats?.status || 'ATIVO')}
+                                    {getPaymentStatusMessage(stats?.payment_status || 'REGULAR', stats?.days_overdue || 0, stats?.overdue_balance || 0, stats?.credit_balance || 0)}
                                 </p>
                             </CardContent>
                         </Card>

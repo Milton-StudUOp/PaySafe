@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import Header from "@/components/layout/Header"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, Loader2, Download, CheckCircle, Calendar as CalendarIcon, MoreHorizontal, Eye } from "lucide-react"
+import { Plus, Search, Loader2, Download, Calendar as CalendarIcon, MoreHorizontal, Eye } from "lucide-react"
 import { TableSkeleton } from "@/components/ui/table-skeleton"
 import { Input } from "@/components/ui/input"
 import { CreateMerchantDialog } from "@/components/forms/CreateMerchantDialog"
@@ -58,26 +58,7 @@ export default function MerchantsPage() {
     const [provinceFilter, setProvinceFilter] = useState("ALL")
     const [districtFilter, setDistrictFilter] = useState("")
 
-    // Handler to set merchant as Regular
-    const setMerchantRegular = async (merchantId: number, merchantName: string) => {
-        try {
-            await api.put(`/merchant-fees/${merchantId}/set-regular`, {
-                notes: "Marcado como regular pelo admin via dashboard"
-            })
-            toast({
-                title: "Sucesso",
-                description: `${merchantName} foi marcado como Regular`,
-            })
-            // Reload data to reflect changes
-            fetchMerchantsData()
-        } catch (error) {
-            toast({
-                title: "Erro",
-                description: "Erro ao marcar como regular",
-                variant: "destructive"
-            })
-        }
-    }
+
 
     // State for billing date dialog
     const [editingDateMerchant, setEditingDateMerchant] = useState<Merchant | null>(null)
@@ -420,16 +401,24 @@ export default function MerchantsPage() {
                                                         <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200">
                                                             Irregular
                                                         </Badge>
-                                                        {merchant.days_overdue && merchant.days_overdue > 0 && (
-                                                            <span className="text-[10px] text-red-500 font-medium">
-                                                                {merchant.days_overdue} dia{merchant.days_overdue > 1 ? 's' : ''} em atraso
+                                                        <span className="text-[10px] text-red-500 font-medium">
+                                                            {(Number(merchant.overdue_balance) > 0
+                                                                ? Number(merchant.overdue_balance)
+                                                                : (merchant.days_overdue || 0) * 10
+                                                            ).toLocaleString('pt-MZ', { style: 'currency', currency: 'MZN' })} em atraso
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-start">
+                                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                                            Regular
+                                                        </Badge>
+                                                        {(Number(merchant.credit_balance) > 0) && (
+                                                            <span className="text-[10px] text-emerald-600 font-medium">
+                                                                +{Number(merchant.credit_balance).toLocaleString('pt-MZ', { style: 'currency', currency: 'MZN' })}
                                                             </span>
                                                         )}
                                                     </div>
-                                                ) : (
-                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                        Regular
-                                                    </Badge>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
@@ -448,12 +437,7 @@ export default function MerchantsPage() {
                                                                 Ver Detalhes
                                                             </DropdownMenuItem>
                                                         </Link>
-                                                        {merchant.payment_status === "IRREGULAR" && (
-                                                            <DropdownMenuItem onClick={() => setMerchantRegular(merchant.id, merchant.full_name)}>
-                                                                <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                                                                <span>Marcar como Regular</span>
-                                                            </DropdownMenuItem>
-                                                        )}
+
 
                                                         {user?.role === "ADMIN" && (
                                                             <DropdownMenuItem onClick={() => openDateDialog(merchant)}>
@@ -494,23 +478,27 @@ export default function MerchantsPage() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="startDate" className="text-right">Início</Label>
+                        <div className="flex flex-col items-center justify-center gap-2">
+                            <Label htmlFor="startDate" className="text-sm font-medium text-slate-700">Início da Cobrança</Label>
                             <Input
                                 id="startDate"
                                 type="date"
+                                className="w-[150px] text-center border-slate-300 bg-white shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20 rounded-md"
                                 value={newStartDate}
                                 onChange={(e) => setNewStartDate(e.target.value)}
-                                className="col-span-3"
                             />
                         </div>
-                        <p className="text-sm text-slate-500 text-center">
+                        <p className="text-sm text-slate-500 text-center px-8">
                             Taxas anteriores a esta data serão ignoradas.
                         </p>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditingDateMerchant(null)}>Cancelar</Button>
-                        <Button onClick={handleUpdateDate} disabled={updatingDate}>
+                        <Button variant="outline" onClick={() => setEditingDateMerchant(null)} className="border-slate-200 text-slate-700 hover:bg-slate-50">Cancelar</Button>
+                        <Button
+                            onClick={handleUpdateDate}
+                            disabled={updatingDate}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                        >
                             {updatingDate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Salvar
                         </Button>

@@ -11,7 +11,7 @@ import logging
 import math
 
 from app.database import SessionLocal
-from app.models import Merchant, PaymentStatus, MerchantFeePayment
+from app.models import Merchant, PaymentStatus, MerchantFeePayment, Transaction, TransactionStatus
 import socket
 import os
 
@@ -30,20 +30,15 @@ scheduler = AsyncIOScheduler()
 
 async def check_daily_payments():
     """
-    Scheduled job that runs at midnight (00:00).
-    
-    Logic:
-    1. Calculate total expected amount = (days since start_date until yesterday) * 10 MT
-       where start_date = MAX(registered_at, FEE_START_DATE)
-    2. Sum total payments made by merchant
-    3. If Total Paid >= Expected -> REGULAR
-    4. If Total Paid < Expected -> IRREGULAR (overdue by diff)
+    Scheduled job: Runs every midnight.
+    Checks if merchants have paid their daily fee.
+    Logic: Total Paid = Sum(FeePayments) + Sum(Transactions where status=SUCESSO)
     """
-    logger.info("🕐 Starting daily payment check job (Cumulative)...")
+    today = date.today()
+    logger.info(f"⏰ Running daily payment check for {today}")
     
     async with SessionLocal() as db:
         try:
-            today = date.today()
             yesterday = today - timedelta(days=1)
             
             # Get all active merchants
@@ -63,7 +58,8 @@ async def check_daily_payments():
                 # determine billing start date
                 # Priority:
                 # 1. merchant.billing_start_date (Admin override / Migration default for old users)
-                # 2. merchant.registered_at (Default for new users)
+                # 2. merchant.registered_at
+                # User requested to allow OLD dates (e.g. 1994) for verification
                 billing_start_date = merchant.billing_start_date or reg_date
                 
                 # If billing start date is in future, no fees yet
@@ -72,20 +68,32 @@ async def check_daily_payments():
                 else:
                     days_billed = (today - billing_start_date).days + 1
                 
-                expected_amount = days_billed * DAILY_FEE_AMOUNT
+                expected_amount = round(days_billed * DAILY_FEE_AMOUNT, 2)
                 
-                # 2. Calculate Total Paid
-                payment_result = await db.execute(
+                # 2. Calculate Total Paid (Direct Fees)
+                fee_result = await db.execute(
                     select(func.sum(MerchantFeePayment.amount))
                     .where(MerchantFeePayment.merchant_id == merchant.id)
                 )
-                total_paid = payment_result.scalar() or 0.0
-                total_paid = float(total_paid)
+                direct_fees = float(fee_result.scalar() or 0.0)
                 
-                # 3. Compare
+                # 3. Calculate Total Collected (Transactions)
+                # 'Transactions' table represents Fee Payments to the municipality
+                tx_result = await db.execute(
+                    select(func.sum(Transaction.amount))
+                    .where(
+                        Transaction.merchant_id == merchant.id,
+                        Transaction.status == TransactionStatus.SUCESSO
+                    )
+                )
+                transaction_payments = float(tx_result.scalar() or 0.0)
+                
+                total_paid = round(direct_fees + transaction_payments, 2)
+                
+                # 4. Compare with epsilon for float safety
                 balance = total_paid - expected_amount
                 
-                if balance >= 0:
+                if balance >= -0.01:
                     # ✅ REGULAR (Paid enough or in advance)
                     if merchant.payment_status != PaymentStatus.REGULAR:
                         merchant.payment_status = PaymentStatus.REGULAR

@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Supports remote server configuration via settings.
 class AppConstants {
   // Default server URL - can be overridden via settings
-  static const String _defaultBaseUrl = "http://10.103.128.109:8000/api/v1";
+  static const String _defaultBaseUrl = "http://10.136.41.109:8000/api/v1";
 
   // App version - displayed in splash screen
   static const String appVersion = "1.0.0";

@@ -124,18 +124,24 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         }
       }
 
-      // Add pending offline payments for today
-      final today = DateTime.now();
-      if (_selectedDate.year == today.year &&
-          _selectedDate.month == today.month &&
-          _selectedDate.day == today.day) {
-        final pendingPayments = await _offlineQueue.getPendingPayments();
-        for (final payment in pendingPayments) {
-          // Mark as pending sync for UI display
-          final tx = Map<String, dynamic>.from(payment);
-          tx['is_pending_sync'] = true;
-          tx['status'] = 'SUCESSO'; // Show as success
-          txs.insert(0, tx); // Add to top of list
+      // Add pending offline payments that match the selected date
+      final pendingPayments = await _offlineQueue.getPendingPayments();
+      for (final payment in pendingPayments) {
+        final paymentDateStr = payment['created_at'] as String?;
+        if (paymentDateStr != null) {
+          final paymentDate = DateTime.tryParse(paymentDateStr);
+          if (paymentDate != null) {
+            // Check if payment date matches selected date
+            if (paymentDate.year == _selectedDate.year &&
+                paymentDate.month == _selectedDate.month &&
+                paymentDate.day == _selectedDate.day) {
+              // Mark as pending sync for UI display
+              final tx = Map<String, dynamic>.from(payment);
+              tx['is_pending_sync'] = true;
+              tx['status'] = 'SUCESSO'; // Show as success
+              txs.insert(0, tx); // Add to top of list
+            }
+          }
         }
       }
 
