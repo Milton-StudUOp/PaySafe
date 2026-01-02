@@ -12,6 +12,7 @@ import 'transaction_history_screen.dart';
 import 'pin_reset_screen.dart';
 import 'merchant_registration_screen.dart';
 import 'merchant_search_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final bool isOfflineMode;
@@ -669,6 +670,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     )
                     .animate()
                     .fadeIn(delay: 600.ms)
+                    .scale(begin: const Offset(0.8, 0.8)),
+
+                _ActionCard(
+                      icon: LucideIcons.qrCode,
+                      title: 'Verificar Recibo',
+                      subtitle: 'Escanear QR Code',
+                      color: const Color(0xFF0EA5E9),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const QRScannerScreen(),
+                        ),
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 700.ms)
                     .scale(begin: const Offset(0.8, 0.8)),
               ],
             ),

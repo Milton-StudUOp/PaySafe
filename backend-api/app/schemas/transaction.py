@@ -58,6 +58,11 @@ class Transaction(TransactionBase):
     created_at: datetime
     updated_at: datetime
     
+    # Offline sync fields - returned so cache can match by offline UUID
+    offline_transaction_uuid: Optional[str] = None
+    offline_payment_reference: Optional[str] = None
+    offline_created_at: Optional[datetime] = None
+    
     # Relationships
     merchant: Optional[Merchant] = None
     agent: Optional[Agent] = None

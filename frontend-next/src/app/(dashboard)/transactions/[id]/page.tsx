@@ -33,10 +33,12 @@ import {
     Calendar,
     MapPin,
     Smartphone,
-    History
+    History,
+    QrCode
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
+import { QRCodeSVG } from "qrcode.react"
 
 export default function TransactionDetailPage() {
     const { id } = useParams() // UUID
@@ -327,11 +329,10 @@ export default function TransactionDetailPage() {
                                     UUID: {transaction.transaction_uuid}
                                 </p>
                                 <div className="flex justify-center">
-                                    {/* Barcode Mockup */}
-                                    <div className="h-8 w-48 bg-slate-900 opacity-90" style={{
-                                        maskImage: 'repeating-linear-gradient(90deg, black, black 2px, transparent 2px, transparent 4px)'
-                                    }}></div>
+                                    {/* QR Code for Verification */}
+                                    <ReceiptQRCode uuid={transaction.transaction_uuid} />
                                 </div>
+                                <p className="text-[9px] text-slate-400 pt-1">Digitalize para verificar autenticidade</p>
                                 <p className="text-[10px] text-slate-400 pt-2">Obrigado pela preferência.</p>
                             </div>
                         </div>
@@ -441,6 +442,57 @@ export default function TransactionDetailPage() {
 
                 </div>
             </div>
+        </div>
+    )
+}
+
+// QR Code component that fetches signed token from backend API
+function ReceiptQRCode({ uuid }: { uuid: string }) {
+    const [qrData, setQrData] = useState<string | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        const fetchQrToken = async () => {
+            try {
+                // Call backend to get properly signed QR token
+                const res = await api.get(`/receipts/qr-token-by-uuid/${uuid}`)
+                setQrData(res.data.qr_token)
+                setLoading(false)
+            } catch (err) {
+                console.error('Failed to fetch QR token:', err)
+                setError('Erro ao gerar QR')
+                setLoading(false)
+            }
+        }
+        fetchQrToken()
+    }, [uuid])
+
+    if (loading) {
+        return (
+            <div className="p-2 bg-white border border-slate-200 rounded-lg inline-block w-[100px] h-[100px] flex items-center justify-center">
+                <div className="animate-spin h-6 w-6 border-2 border-slate-300 border-t-slate-600 rounded-full"></div>
+            </div>
+        )
+    }
+
+    if (error || !qrData) {
+        return (
+            <div className="p-2 bg-red-50 border border-red-200 rounded-lg inline-block text-red-500 text-xs">
+                {error || 'QR indisponível'}
+            </div>
+        )
+    }
+
+    return (
+        <div className="p-2 bg-white border border-slate-200 rounded-lg inline-block">
+            <QRCodeSVG
+                value={qrData}
+                size={100}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#0f172a"
+            />
         </div>
     )
 }

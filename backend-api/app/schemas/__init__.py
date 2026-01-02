@@ -3,7 +3,7 @@ from .merchant import Merchant, MerchantCreate, MerchantUpdate, MerchantType, Me
 from .agent import Agent, AgentCreate, AgentUpdate, AgentLogin, AgentStatus
 from .pos_device import POSDevice, POSDeviceCreate, POSDeviceUpdate, POSStatus
 from .transaction import Transaction, TransactionCreate, TransactionUpdate, PaymentMethod, TransactionStatus
-from .receipt import Receipt, ReceiptCreate, ReceiptReprint, ReceiptLookup
+from .receipt import Receipt, ReceiptCreate, ReceiptReprint, ReceiptLookup, ReceiptVerification
 from .balance import Balance, BalanceCreate, BalanceUpdate
 from .user import User, UserCreate, UserUpdate, UserRole, UserStatus, Token, TokenData
 from .audit_log import AuditLog, AuditLogCreate, ActorType
@@ -27,7 +27,7 @@ __all__ = [
     # Transaction
     "Transaction", "TransactionCreate", "TransactionUpdate", "PaymentMethod", "TransactionStatus",
     # Receipt
-    "Receipt", "ReceiptCreate", "ReceiptReprint", "ReceiptLookup",
+    "Receipt", "ReceiptCreate", "ReceiptReprint", "ReceiptLookup", "ReceiptVerification",
     # Balance
     "Balance", "BalanceCreate", "BalanceUpdate",
     # User

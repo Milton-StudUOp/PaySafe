@@ -45,6 +45,8 @@ dependencies:
   device_info_plus: ^10.1.0
   crypto: ^3.0.3
   uuid: ^4.5.2
+  qr_flutter: ^4.1.0          # QR code generation for receipts
+  mobile_scanner: ^5.1.1      # Camera-based QR scanning
 
 dev_dependencies:
   flutter_test:

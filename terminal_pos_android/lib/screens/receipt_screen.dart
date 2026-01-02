@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import '../utils/ui_utils.dart';
 
 class ReceiptScreen extends StatelessWidget {
@@ -311,20 +314,14 @@ class ReceiptScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Barcode Mockup
-                          Container(
-                            height: 30,
-                            width: 180,
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: CustomPaint(
-                                size: const Size(180, 30),
-                                painter: _BarcodePainter(),
-                              ),
+                          // QR Code for Verification
+                          _buildVerificationQRCode(uuid),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Digitalize para verificar autenticidade",
+                            style: GoogleFonts.inter(
+                              fontSize: 9,
+                              color: Colors.grey.shade400,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -453,6 +450,51 @@ class ReceiptScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Generate QR code with signed verification token
+  /// MUST match Python backend: hmac.new(key.encode(), code.encode(), sha256).hexdigest()[:16]
+  Widget _buildVerificationQRCode(String uuid) {
+    const secretKey = 'paysafe-qr-secret-2026';
+    final receiptCode = 'TXN-$uuid';
+
+    // Use HMAC-SHA256 exactly like Python:
+    // Python: hmac.new(key.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256).hexdigest()[:16]
+    // Dart equivalent:
+    final keyBytes = utf8.encode(secretKey);
+    final messageBytes = utf8.encode(receiptCode);
+    final hmacSha256 = Hmac(sha256, keyBytes);
+    final digest = hmacSha256.convert(messageBytes);
+
+    // digest.toString() returns lowercase hex string (same as Python hexdigest)
+    final signature = digest.toString().substring(0, 16);
+
+    final qrData = '$receiptCode|$signature';
+
+    // Debug print to verify signature
+    debugPrint('\\n\u2550\u2550\u2550 QR CODE GENERATED \u2550\u2550\u2550');
+    debugPrint('Receipt Code: $receiptCode');
+    debugPrint('Signature: $signature');
+    debugPrint('Full QR Data: $qrData');
+    debugPrint(
+      '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\\n',
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: QrImageView(
+        data: qrData,
+        version: QrVersions.auto,
+        size: 100,
+        backgroundColor: Colors.white,
+        errorCorrectionLevel: QrErrorCorrectLevel.M,
       ),
     );
   }
