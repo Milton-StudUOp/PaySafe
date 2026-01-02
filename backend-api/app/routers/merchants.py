@@ -57,11 +57,14 @@ async def list_merchants(
             query = query.where(MerchantModel.id == -1)
     
     elif current_user.role.value == "SUPERVISOR":
+        # SUPERVISOR: Filter by district if set, otherwise by province
         if current_user.scope_district:
             query = query.where(MarketModel.district == current_user.scope_district)
+        elif current_user.scope_province:
+            query = query.where(MarketModel.province == current_user.scope_province)
         else:
-            # SAFETY: If supervisor has no district, they see NOTHING.
-            query = query.where(MerchantModel.id == -1) 
+            # SAFETY: If supervisor has no scope, they see NOTHING.
+            query = query.where(MerchantModel.id == -1)
 
     elif current_user.role.value == "FUNCIONARIO":
         # FUNCIONARIO must have province scope

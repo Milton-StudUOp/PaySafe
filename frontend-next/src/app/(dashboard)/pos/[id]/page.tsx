@@ -49,7 +49,7 @@ export default function POSDetailPage() {
             const res = await api.get(`/pos-devices/${id}`)
             setPos(res.data)
 
-            // Parallel fetch for related data
+            // Parallel fetch for related data using Promise.allSettled
             const requests = [
                 api.get(`/transactions?pos_id=${id}`),
                 api.get(`/audit-logs/entity/POS/${id}`)
@@ -61,11 +61,32 @@ export default function POSDetailPage() {
                 requests.push(Promise.resolve({ data: null } as any))
             }
 
-            const [resTransac, resAudit, resAgent] = await Promise.all(requests)
+            const results = await Promise.allSettled(requests)
+            const [resTransac, resAudit, resAgent] = results
 
-            setTransactions(Array.isArray(resTransac.data) ? resTransac.data : [])
-            setAuditLogs(Array.isArray(resAudit.data) ? resAudit.data : [])
-            setAgent(resAgent.data)
+            // Transactions - optional
+            if (resTransac.status === 'fulfilled') {
+                setTransactions(Array.isArray(resTransac.value.data) ? resTransac.value.data : [])
+            } else {
+                console.warn("Could not load transactions:", resTransac.reason)
+                setTransactions([])
+            }
+
+            // Audit logs - optional (403 for non-admin is expected)
+            if (resAudit.status === 'fulfilled') {
+                setAuditLogs(Array.isArray(resAudit.value.data) ? resAudit.value.data : [])
+            } else {
+                console.warn("Could not load audit logs:", resAudit.reason)
+                setAuditLogs([])
+            }
+
+            // Agent - optional
+            if (resAgent.status === 'fulfilled') {
+                setAgent(resAgent.value.data)
+            } else {
+                console.warn("Could not load agent:", resAgent.reason)
+                setAgent(null)
+            }
 
         } catch (error) {
             console.error("Error fetching POS details:", error)

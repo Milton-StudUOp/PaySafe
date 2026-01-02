@@ -321,16 +321,16 @@ async def update_pos_device(
         )
         db.add(jcr)
         
-        # Audit log
-        audit = AuditLog(
-            actor_type=ActorType.ADMIN,
-            actor_id=current_user.id,
-            action="REQUEST_JURISDICTION_CHANGE",
-            entity="POS",
+        # Audit log using Service for IP capture
+        from app.services.audit_service import AuditService
+        from app.models.audit_log import Severity
+        
+        await AuditService.log_audit(
+            db, current_user, "REQUEST_JURISDICTION_CHANGE", "POS",
+            f"Requested province change from {current_province} to {pending_province}",
             entity_id=pos.id,
-            description=f"Requested province change from {current_province} to {pending_province}"
+            severity=Severity.MEDIUM
         )
-        db.add(audit)
         
         await db.commit()
         await db.refresh(pos)

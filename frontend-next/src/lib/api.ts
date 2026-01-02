@@ -38,7 +38,9 @@ api.interceptors.response.use(
                 url.includes('/transactions/') ||
                 url.includes('/merchants/') ||
                 url.includes('/agents/') ||
-                url.includes('/markets/');
+                url.includes('/markets/') ||
+                url.includes('/pos/') ||
+                url.includes('/audit-logs/');
 
             // IDOR Protection / Not Found / Unauthorized
             // Only redirect for listing pages, not detail views

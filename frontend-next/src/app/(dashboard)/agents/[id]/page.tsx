@@ -63,7 +63,7 @@ export default function AgentDetailPage() {
             const agentData = resAgent.data
             setAgent(agentData)
 
-            // Parallel fetch for related data
+            // Parallel fetch for related data using Promise.allSettled
             const requests = [
                 api.get(`/transactions/agent/${id}`),
                 api.get(`/audit-logs/entity/AGENT/${id}`)
@@ -74,11 +74,33 @@ export default function AgentDetailPage() {
                 requests.push(Promise.resolve({ data: null } as any))
             }
 
-            const [resTransac, resAudit, resMarket] = await Promise.all(requests)
+            const results = await Promise.allSettled(requests)
+            const [resTransac, resAudit, resMarket] = results
 
-            setTransactions(Array.isArray(resTransac.data) ? resTransac.data : [])
-            setAuditLogs(Array.isArray(resAudit.data) ? resAudit.data : [])
-            setMarket(resMarket.data)
+            // Transactions - optional
+            if (resTransac.status === 'fulfilled') {
+                setTransactions(Array.isArray(resTransac.value.data) ? resTransac.value.data : [])
+            } else {
+                console.warn("Could not load transactions:", resTransac.reason)
+                setTransactions([])
+            }
+
+            // Audit logs - optional (403 for non-admin is expected)
+            if (resAudit.status === 'fulfilled') {
+                setAuditLogs(Array.isArray(resAudit.value.data) ? resAudit.value.data : [])
+            } else {
+                console.warn("Could not load audit logs:", resAudit.reason)
+                setAuditLogs([])
+            }
+
+            // Market - optional
+            if (resMarket.status === 'fulfilled') {
+                setMarket(resMarket.value.data)
+            } else {
+                console.warn("Could not load market:", resMarket.reason)
+                setMarket(null)
+            }
+
             setError(null)
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido ao carregar agente'

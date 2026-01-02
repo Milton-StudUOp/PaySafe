@@ -7,6 +7,7 @@ import '../services/merchant_cache_service.dart';
 import '../services/nfc_scan_service.dart';
 import '../services/auth_service.dart';
 import '../services/offline_merchant_queue_service.dart';
+import '../services/background_sync_manager.dart';
 import '../utils/ui_utils.dart';
 
 class EditMerchantScreen extends StatefulWidget {
@@ -296,6 +297,9 @@ class _EditMerchantScreenState extends State<EditMerchantScreen> {
 
       // ALSO update local cache so changes reflect immediately
       await _merchantCache.updateCachedMerchant(widget.merchant['id'], data);
+
+      // 🔄 Background sync: Keep cache fresh for offline usage
+      BackgroundSyncManager().syncAfterMerchantChange();
 
       if (mounted) {
         UIUtils.showSuccessDialog(

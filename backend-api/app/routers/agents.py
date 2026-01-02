@@ -24,6 +24,10 @@ async def list_agents(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
+    from datetime import datetime, time
+    from sqlalchemy import func, and_
+    from app.models.transaction import Transaction
+    
     query = select(AgentModel).outerjoin(MarketModel, AgentModel.assigned_market_id == MarketModel.id).options(selectinload(AgentModel.pos_devices))
 
     # 1. Explicit Filters
@@ -36,13 +40,34 @@ async def list_agents(
     if current_user.role.value == "SUPERVISOR":
         if current_user.scope_district:
             query = query.where(MarketModel.district == current_user.scope_district)
+        elif current_user.scope_province:
+            query = query.where(MarketModel.province == current_user.scope_province)
     
     elif current_user.role.value == "FUNCIONARIO":
         if current_user.scope_province:
             query = query.where(MarketModel.province == current_user.scope_province)
 
     result = await db.execute(query.offset(skip).limit(limit))
-    return result.scalars().all()
+    agents = result.scalars().all()
+    
+    # Calculate today's stats for each agent
+    now = datetime.now()
+    today_start = datetime.combine(now.date(), time.min)
+    
+    for agent in agents:
+        today_stats = await db.execute(
+            select(func.sum(Transaction.amount))
+            .where(
+                and_(
+                    Transaction.agent_id == agent.id,
+                    Transaction.created_at >= today_start,
+                    Transaction.status == "SUCESSO"
+                )
+            )
+        )
+        agent.total_collected_today = float(today_stats.scalar() or 0)
+    
+    return agents
 
 @router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
 async def create_agent(
@@ -183,9 +208,13 @@ async def agent_login(login_data: AgentLogin, db: AsyncSession = Depends(get_db)
         )
     
     # Generate JWT Token for Agent
-    from datetime import timedelta
+    from datetime import timedelta, datetime
     from app.config import settings
     from app.services.auth_service import AuthService
+    
+    # Update last_login_at
+    agent.last_login_at = datetime.now()
+    await db.commit()
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = AuthService.create_access_token(

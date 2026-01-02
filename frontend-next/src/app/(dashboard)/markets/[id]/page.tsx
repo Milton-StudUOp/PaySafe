@@ -38,6 +38,7 @@ import { EditMarketDialog } from "@/components/forms/EditMarketDialog"
 import { CreateMerchantDialog } from "@/components/forms/CreateMerchantDialog"
 import { CreatePosDialog } from "@/components/forms/CreatePosDialog"
 import { MarketRevenueChart } from "@/components/features/markets/MarketRevenueChart"
+import { useAuth } from "@/lib/auth"
 
 export default function MarketDetailPage() {
     const { id } = useParams()
@@ -47,6 +48,8 @@ export default function MarketDetailPage() {
     const [agents, setAgents] = useState<Agent[]>([])
     const [posDevices, setPosDevices] = useState<POSDevice[]>([])
     const [loading, setLoading] = useState(true)
+    const { user } = useAuth()
+    const canEdit = user?.role !== 'SUPERVISOR'
 
     // Note: In a real app, we would paginate these lists or fetch them only when tab is clicked.
     // For now, we will fetch standard lists and filter client-side (or simple backend queries if endpoints existed)
@@ -72,30 +75,55 @@ export default function MarketDetailPage() {
     const fetchData = async () => {
         setLoading(true)
         try {
-            const [resMarket, resMerchants, resAgents] = await Promise.all([
+            // Use Promise.allSettled to handle individual failures gracefully
+            const results = await Promise.allSettled([
                 api.get(`/markets/${id}`),
                 api.get(`/merchants/`), // Potentially heavy, ideally filter by query param
-                api.get(`/agents/`)
+                api.get(`/agents/`),
+                api.get('/pos-devices/')
             ])
 
-            setMarket(resMarket.data)
+            const [resMarket, resMerchants, resAgents, resPos] = results
 
-            // Client-side filtering (Not scalable but functional for MVP)
-            const allMerchants: Merchant[] = resMerchants.data
-            setMerchants(allMerchants.filter(m => m.market_id === Number(id)))
+            // Market is required - if it fails, show error
+            if (resMarket.status === 'fulfilled') {
+                const marketData = resMarket.value.data
+                setMarket(marketData)
 
-            const allAgents: Agent[] = resAgents.data
-            setAgents(allAgents.filter(a => a.assigned_market_id === Number(id)))
+                // Client-side filtering (Not scalable but functional for MVP)
+                // Merchants
+                if (resMerchants.status === 'fulfilled') {
+                    const allMerchants: Merchant[] = resMerchants.value.data
+                    setMerchants(allMerchants.filter(m => m.market_id === Number(id)))
+                } else {
+                    console.warn("Could not load merchants:", resMerchants.reason)
+                    setMerchants([])
+                }
 
-            // Fetch POS devices (filtering by market location)
-            const resPos = await api.get('/pos-devices/')
-            const allPos: POSDevice[] = resPos.data
-            // Filter POS that are in the same district/province as the market
-            const marketData = resMarket.data
-            setPosDevices(allPos.filter(p =>
-                p.district === marketData.district &&
-                p.province === marketData.province
-            ))
+                // Agents
+                if (resAgents.status === 'fulfilled') {
+                    const allAgents: Agent[] = resAgents.value.data
+                    setAgents(allAgents.filter(a => a.assigned_market_id === Number(id)))
+                } else {
+                    console.warn("Could not load agents:", resAgents.reason)
+                    setAgents([])
+                }
+
+                // POS Devices
+                if (resPos.status === 'fulfilled') {
+                    const allPos: POSDevice[] = resPos.value.data
+                    setPosDevices(allPos.filter(p =>
+                        p.district === marketData.district &&
+                        p.province === marketData.province
+                    ))
+                } else {
+                    console.warn("Could not load POS devices:", resPos.reason)
+                    setPosDevices([])
+                }
+            } else {
+                console.error("Error fetching market:", resMarket.reason)
+                setMarket(null)
+            }
 
         } catch (error) {
             console.error("Error fetching market details:", error)
@@ -133,9 +161,11 @@ export default function MarketDetailPage() {
                     </div>
                 </div>
 
-                <div className="flex gap-2">
-                    <EditMarketDialog market={market} onSuccess={fetchData} />
-                </div>
+                {canEdit && (
+                    <div className="flex gap-2">
+                        <EditMarketDialog market={market} onSuccess={fetchData} />
+                    </div>
+                )}
             </div>
 
             {/* TABS */}

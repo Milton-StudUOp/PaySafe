@@ -52,6 +52,18 @@ app.add_middleware(
 # Rate Limiting (300 req/min)
 app.add_middleware(RateLimitMiddleware, max_requests=300, window_seconds=60)
 
+# Request Context Middleware - captures request for audit logging
+from starlette.middleware.base import BaseHTTPMiddleware
+from app.utils.request_context import set_request_context
+
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        set_request_context(request)
+        response = await call_next(request)
+        return response
+
+app.add_middleware(RequestContextMiddleware)
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

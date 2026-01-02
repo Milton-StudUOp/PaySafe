@@ -16,6 +16,7 @@ import '../services/offline_payment_queue_service.dart';
 import '../services/offline_merchant_queue_service.dart';
 import '../services/transaction_cache_service.dart'; // Added for caching online payments
 import '../services/connectivity_service.dart';
+import '../services/background_sync_manager.dart';
 import '../utils/ui_utils.dart';
 import 'dart:async'; // For StreamSubscription
 
@@ -494,6 +495,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
           // Success: Cache transaction immediately for offline history consistency
           await _transactionCache.addTransaction(receiptData);
 
+          // 🔄 Background sync: Keep cache fresh for offline usage
+          // Runs silently in background without blocking UI
+          BackgroundSyncManager().syncAfterPayment();
+
           // Success: Show dialog THEN navigate to receipt
           UIUtils.showSuccessDialog(
             context,
@@ -813,13 +818,76 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           ),
           if (_errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                _errorMessage!,
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
+            Container(
+                  margin: const EdgeInsets.only(top: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(10),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(color: Colors.amber.shade100),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          LucideIcons.creditCard,
+                          size: 32,
+                          color: Colors.amber.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Verifique se o cartão NFC está registrado no sistema",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _errorMessage = null;
+                            _merchantIdController.clear();
+                          });
+                          _startNfcSession();
+                        },
+                        icon: const Icon(LucideIcons.refreshCw, size: 16),
+                        label: const Text("Tentar Novamente"),
+                      ),
+                    ],
+                  ),
+                )
+                .animate()
+                .fadeIn(duration: 200.ms)
+                .scale(
+                  begin: const Offset(0.95, 0.95),
+                  end: const Offset(1, 1),
+                ),
 
           // Divider with OR
           Padding(

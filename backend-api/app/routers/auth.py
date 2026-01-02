@@ -1,6 +1,6 @@
 from datetime import timedelta
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -115,6 +115,7 @@ from app.models.merchant import Merchant, MerchantStatus
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     # 1. Try to find User by username OR email
@@ -133,7 +134,7 @@ async def login_for_access_token(
     if user:
         if not verify_password(form_data.password, user.password_hash):
             await AuditService.log_security_event(
-                db, None, "LOGIN_FAILED", 
+                db, request, "LOGIN_FAILED", 
                 f"Failed login attempt for user: {identifier}", 
                 severity=Severity.LOW, 
                 actor=user
@@ -157,7 +158,8 @@ async def login_for_access_token(
         if user.status.value != "ATIVO":
              await AuditService.log_audit(
                 db, user, "LOGIN_BLOCKED", "USER", 
-                "User account is not active", severity=Severity.MEDIUM, event_type=EventType.ACCESS_VIOLATION
+                "User account is not active", severity=Severity.MEDIUM, event_type=EventType.ACCESS_VIOLATION,
+                request=request
             )
              await db.commit()
              raise HTTPException(
@@ -181,7 +183,8 @@ async def login_for_access_token(
             db, user, "LOGIN_SUCCESS", "USER", 
             f"User logged in successfully via API", 
             entity_name=user.full_name,
-            severity=Severity.INFO
+            severity=Severity.INFO,
+            request=request
         )
         
         await db.commit()
@@ -194,7 +197,7 @@ async def login_for_access_token(
         if not merchant or not verify_password(form_data.password, merchant.password_hash):
              # Unknown user/merchant or bad password for merchant
              await AuditService.log_security_event(
-                db, None, "LOGIN_FAILED", 
+                db, request, "LOGIN_FAILED", 
                 f"Failed login attempt for unknown ID or Merchant: {form_data.username}", 
                 severity=Severity.LOW
             )
@@ -228,7 +231,8 @@ async def login_for_access_token(
             entity_id=merchant.id,
             entity_name=merchant.full_name,
             actor_type_override=ActorType.MERCHANT,
-            severity=Severity.INFO
+            severity=Severity.INFO,
+            request=request
         )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -269,6 +273,7 @@ class POSLoginResponse(BaseModel):
 @router.post("/pos-login", response_model=POSLoginResponse)
 async def pos_device_login(
     credentials: POSLoginRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -291,7 +296,7 @@ async def pos_device_login(
     
     if not device:
         await AuditService.log_security_event(
-            db, None, "POS_LOGIN_UNREGISTERED_DEVICE",
+            db, request, "POS_LOGIN_UNREGISTERED_DEVICE",
             f"Login attempt from unregistered device: {device_serial}",
             severity=Severity.HIGH
         )
@@ -304,7 +309,7 @@ async def pos_device_login(
     # 2. Validate Device Status
     if device.status.value != "ATIVO":
         await AuditService.log_security_event(
-            db, None, "POS_LOGIN_DEVICE_BLOCKED",
+            db, request, "POS_LOGIN_DEVICE_BLOCKED",
             f"Login attempt from {device.status.value} device: {device_serial}",
             severity=Severity.MEDIUM,
             actor_province=device.province,
@@ -324,7 +329,7 @@ async def pos_device_login(
     
     if not agent or not verify_password(credentials.password, agent.pin_hash):
         await AuditService.log_security_event(
-            db, None, "POS_LOGIN_FAILED",
+            db, request, "POS_LOGIN_FAILED",
             f"Failed agent login on device {device_serial}: {credentials.username}",
             severity=Severity.MEDIUM,
             actor_province=device.province,
@@ -347,7 +352,7 @@ async def pos_device_login(
     # 5. Validate Device-Agent Binding
     if device.assigned_agent_id is None:
         await AuditService.log_security_event(
-            db, None, "POS_LOGIN_UNASSIGNED_DEVICE",
+            db, request, "POS_LOGIN_UNASSIGNED_DEVICE",
             f"Login attempt on unassigned device {device_serial} by agent {agent.agent_code}",
             severity=Severity.MEDIUM,
             actor_province=device.province,
@@ -361,7 +366,7 @@ async def pos_device_login(
     
     if device.assigned_agent_id != agent.id:
         await AuditService.log_security_event(
-            db, None, "POS_LOGIN_WRONG_AGENT",
+            db, request, "POS_LOGIN_WRONG_AGENT",
             f"Agent {agent.agent_code} (ID:{agent.id}) tried to login on device assigned to agent ID:{device.assigned_agent_id}",
             severity=Severity.HIGH,
             actor_province=device.province,
@@ -373,8 +378,10 @@ async def pos_device_login(
             detail="Este dispositivo está atribuído a outro agente."
         )
     
-    # 6. All validations passed - Update device last_seen
+    # 6. All validations passed - Update device last_seen and agent last_login_at
+    from datetime import datetime
     device.last_seen = func.current_timestamp()
+    agent.last_login_at = datetime.now()
     
     # 7. Get Agent's Market for scope
     market_result = await db.execute(select(Market).where(Market.id == agent.assigned_market_id))
@@ -412,6 +419,7 @@ async def pos_device_login(
         entity_name=agent.full_name,
         actor_type_override=ActorType.AGENT,
         severity=Severity.INFO,
+        request=request,
         actor_province=device.province,
         actor_district=device.district
     )

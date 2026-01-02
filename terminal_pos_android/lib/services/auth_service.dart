@@ -205,7 +205,19 @@ class AuthService {
         return await posLogin(agentCode, pin, deviceSerial);
       }
     } catch (e) {
-      // Online login failed, try offline
+      // Check if error is from server (not network error)
+      final errorMsg = e.toString();
+
+      // If server returned an error (not connection error), propagate it
+      // This includes "POS não registrado", "PIN inválido", etc.
+      if (!errorMsg.contains('Erro de conexão') &&
+          !errorMsg.contains('SocketException') &&
+          !errorMsg.contains('TimeoutException') &&
+          !errorMsg.contains('HandshakeException')) {
+        // Server responded with an error - throw it as is
+        rethrow;
+      }
+      // Connection error - try offline fallback
     }
 
     // Backend unavailable, try offline login
@@ -213,9 +225,9 @@ class AuthService {
       return await offlineLogin(agentCode, pin);
     }
 
-    // No cached credentials available
+    // No cached credentials available - provide clear message
     throw Exception(
-      'Servidor indisponível e sem credenciais offline. Conecte-se online pelo menos uma vez.',
+      'Sem credenciais em cache. Conecte-se ao servidor pela primeira vez para ativar o login offline.',
     );
   }
 

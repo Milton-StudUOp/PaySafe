@@ -491,9 +491,88 @@ class _MerchantSearchScreenState extends State<MerchantSearchScreen> {
             else if (_errorMessage != null)
               Expanded(
                 child: Center(
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
+                  child: Container(
+                    margin: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(13),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _errorMessage!.contains('não identificado')
+                                ? Colors.amber.shade50
+                                : Colors.red.shade50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _errorMessage!.contains('não identificado')
+                                ? LucideIcons.creditCard
+                                : _errorMessage!.contains('encontrado')
+                                ? LucideIcons.userX
+                                : LucideIcons.alertCircle,
+                            size: 48,
+                            color: _errorMessage!.contains('não identificado')
+                                ? Colors.amber.shade700
+                                : Colors.red.shade400,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _errorMessage!.contains('não identificado')
+                              ? "Verifique se o cartão está registrado no sistema"
+                              : _errorMessage!.contains('encontrado')
+                              ? "Tente pesquisar por nome, telefone ou usar NFC"
+                              : "Verifique a conexão e tente novamente",
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _errorMessage = null;
+                              _searchController.clear();
+                            });
+                          },
+                          icon: const Icon(LucideIcons.refreshCw, size: 18),
+                          label: const Text("Tentar Novamente"),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               )

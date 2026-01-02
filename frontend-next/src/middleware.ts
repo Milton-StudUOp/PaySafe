@@ -59,7 +59,7 @@ export function middleware(request: NextRequest) {
         }
 
         // 2. SUPERVISOR & FUNCIONARIO
-        // Allowed: /dashboard, /merchants, /agents, /markets, /pos, /transactions
+        // Allowed: /dashboard, /merchants, /agents, /markets, /pos, /transactions, system pages
         if (userRole === 'SUPERVISOR' || userRole === 'FUNCIONARIO') {
             const isAllowed =
                 pathname.startsWith('/dashboard') ||
@@ -68,7 +68,9 @@ export function middleware(request: NextRequest) {
                 pathname.startsWith('/markets') ||
                 pathname.startsWith('/pos') ||
                 pathname.startsWith('/approvals') ||
-                pathname.startsWith('/transactions');
+                pathname.startsWith('/transactions') ||
+                pathname.startsWith('/not-found') ||
+                pathname.startsWith('/error');
 
             if (!isAllowed) {
                 console.warn(`[Middleware] Blocking ${userRole} from ${pathname}`);

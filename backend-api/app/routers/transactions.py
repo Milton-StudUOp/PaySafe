@@ -28,6 +28,7 @@ async def list_transactions(
     merchant_id: Optional[int] = None,
     agent_id: Optional[int] = None,
     pos_id: Optional[int] = None,
+    market_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     province: Optional[str] = None,
@@ -94,6 +95,9 @@ async def list_transactions(
         
     if pos_id:
         filters.append(TransactionModel.pos_id == pos_id)
+        
+    if market_id:
+        filters.append(Merchant.market_id == market_id)
         
     if start_date:
         filters.append(func.date(TransactionModel.created_at) >= start_date)

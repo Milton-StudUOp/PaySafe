@@ -100,18 +100,36 @@ class AuditService:
              actor_type = actor_type_override
              actor_name = actor_type_override.value
         
-        # 2. Extract Request Context
-        ip_address = "0.0.0.0"
-        user_agent = None
-        req_method = None
-        req_path = None
+        # 2. Extract Request Context - use passed request or get from context
+        from app.utils.request_context import get_client_ip, get_user_agent, get_request_method, get_request_path, get_request_context
         
-        if request:
-            if request.client:
-                ip_address = request.client.host
-            user_agent = request.headers.get("user-agent")
-            req_method = request.method
-            req_path = str(request.url.path)
+        # Try to use passed request first, fall back to context
+        effective_request = request or get_request_context()
+        
+        if effective_request:
+            # Use request directly if available
+            if effective_request.client:
+                ip_address = effective_request.client.host
+            else:
+                ip_address = get_client_ip()
+            
+            # Check for proxy headers
+            forwarded_for = effective_request.headers.get("x-forwarded-for")
+            if forwarded_for:
+                ip_address = forwarded_for.split(",")[0].strip()
+            real_ip = effective_request.headers.get("x-real-ip")
+            if real_ip:
+                ip_address = real_ip.strip()
+                
+            user_agent = effective_request.headers.get("user-agent")
+            req_method = effective_request.method
+            req_path = str(effective_request.url.path)
+        else:
+            # No request available at all - use context helpers as last resort
+            ip_address = get_client_ip()
+            user_agent = get_user_agent()
+            req_method = get_request_method()
+            req_path = get_request_path()
             
         # 3. Create Log Entry
         log_entry = AuditLog(

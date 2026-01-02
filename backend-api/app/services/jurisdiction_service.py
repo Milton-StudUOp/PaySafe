@@ -82,15 +82,16 @@ async def log_unauthorized_access(
     db: AsyncSession
 ) -> None:
     """Log unauthorized access attempt for security auditing."""
-    audit = AuditLog(
-        actor_type=ActorType.ADMIN,
-        actor_id=user.id,
-        action="UNAUTHORIZED_ENTITY_ACCESS_ATTEMPT",
-        entity=entity_type,
+    from app.services.audit_service import AuditService
+    from app.models.audit_log import Severity, EventType
+    
+    await AuditService.log_audit(
+        db, user, "UNAUTHORIZED_ENTITY_ACCESS_ATTEMPT", entity_type,
+        f"User {user.id} ({user.email}) attempted to access {entity_type} {entity_id} outside jurisdiction ({user.scope_province}/{user.scope_district})",
         entity_id=entity_id,
-        description=f"User {user.id} ({user.email}) attempted to access {entity_type} {entity_id} outside jurisdiction ({user.scope_province}/{user.scope_district})"
+        severity=Severity.HIGH,
+        event_type=EventType.ACCESS_VIOLATION
     )
-    db.add(audit)
     await db.commit()
 
 
@@ -134,8 +135,20 @@ async def check_agent_jurisdiction(
         )
         market = market_result.scalar_one_or_none()
         if market:
-            if _check_jurisdiction_match(market.province, market.district, user):
-                return agent
+            # SUPERVISOR: Can access province-level (with optional district restriction)
+            if hasattr(user, 'role') and user.role.value == "SUPERVISOR":
+                if user.scope_district:
+                    # SUPERVISOR with district scope: restrict to district
+                    if market.district == user.scope_district:
+                        return agent
+                elif user.scope_province:
+                    # SUPERVISOR with only province scope: can access all in province
+                    if market.province == user.scope_province:
+                        return agent
+            else:
+                # FUNCIONARIO and others: standard jurisdiction match
+                if _check_jurisdiction_match(market.province, market.district, user):
+                    return agent
     
     # Access denied - log and return None
     if log_attempt:
@@ -196,8 +209,20 @@ async def check_merchant_jurisdiction(
         )
         market = market_result.scalar_one_or_none()
         if market:
-            if _check_jurisdiction_match(market.province, market.district, user):
-                return merchant
+            # SUPERVISOR: Can access province-level (with optional district restriction)
+            if hasattr(user, 'role') and user.role.value == "SUPERVISOR":
+                if user.scope_district:
+                    # SUPERVISOR with district scope: restrict to district
+                    if market.district == user.scope_district:
+                        return merchant
+                elif user.scope_province:
+                    # SUPERVISOR with only province scope: can access all in province
+                    if market.province == user.scope_province:
+                        return merchant
+            else:
+                # FUNCIONARIO and others: standard jurisdiction match
+                if _check_jurisdiction_match(market.province, market.district, user):
+                    return merchant
     
     # Access denied
     if log_attempt:
@@ -231,9 +256,20 @@ async def check_pos_jurisdiction(
     if _is_admin(user) or _is_auditor(user):
         return pos
     
-    # Check direct jurisdiction fields
-    if _check_jurisdiction_match(pos.province, pos.district, user):
-        return pos
+    # SUPERVISOR: Can access province-level (with optional district restriction)
+    if hasattr(user, 'role') and user.role.value == "SUPERVISOR":
+        if user.scope_district:
+            # SUPERVISOR with district scope: restrict to district
+            if pos.district == user.scope_district:
+                return pos
+        elif user.scope_province:
+            # SUPERVISOR with only province scope: can access all in province
+            if pos.province == user.scope_province:
+                return pos
+    else:
+        # FUNCIONARIO and others: standard jurisdiction match
+        if _check_jurisdiction_match(pos.province, pos.district, user):
+            return pos
     
     # Access denied
     if log_attempt:
@@ -267,9 +303,20 @@ async def check_market_jurisdiction(
     if _is_admin(user) or _is_auditor(user):
         return market
     
-    # Check direct jurisdiction fields
-    if _check_jurisdiction_match(market.province, market.district, user):
-        return market
+    # SUPERVISOR: Can access province-level (with optional district restriction)
+    if hasattr(user, 'role') and user.role.value == "SUPERVISOR":
+        if user.scope_district:
+            # SUPERVISOR with district scope: restrict to district
+            if market.district == user.scope_district:
+                return market
+        elif user.scope_province:
+            # SUPERVISOR with only province scope: can access all in province
+            if market.province == user.scope_province:
+                return market
+    else:
+        # FUNCIONARIO and others: standard jurisdiction match
+        if _check_jurisdiction_match(market.province, market.district, user):
+            return market
     
     # Access denied
     if log_attempt:

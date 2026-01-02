@@ -60,14 +60,38 @@ export default function MerchantDetailPage() {
     const fetchData = async () => {
         setLoading(true)
         try {
-            const [resMerchant, resTransac, resAudit] = await Promise.all([
+            // Use Promise.allSettled to handle individual failures gracefully
+            // Merchant is required, transactions and audit logs are optional
+            const [resMerchant, resTransac, resAudit] = await Promise.allSettled([
                 api.get(`/merchants/${id}`),
                 api.get(`/transactions?merchant_id=${id}&limit=50`),
                 api.get(`/audit-logs/entity/MERCHANT/${id}`)
             ])
-            setMerchant(resMerchant.data)
-            setTransactions(resTransac.data)
-            setAuditLogs(resAudit.data)
+
+            // Merchant is required - if it fails, show error
+            if (resMerchant.status === 'fulfilled') {
+                setMerchant(resMerchant.value.data)
+            } else {
+                console.error("Error fetching merchant:", resMerchant.reason)
+                setMerchant(null)
+                return
+            }
+
+            // Transactions - optional, show empty if fails
+            if (resTransac.status === 'fulfilled') {
+                setTransactions(resTransac.value.data)
+            } else {
+                console.warn("Could not load transactions:", resTransac.reason)
+                setTransactions([])
+            }
+
+            // Audit logs - optional, show empty if fails (403 for non-admin is expected)
+            if (resAudit.status === 'fulfilled') {
+                setAuditLogs(resAudit.value.data)
+            } else {
+                console.warn("Could not load audit logs:", resAudit.reason)
+                setAuditLogs([])
+            }
         } catch (error) {
             console.error("Error fetching merchant details:", error)
         } finally {

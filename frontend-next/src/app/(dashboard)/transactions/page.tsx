@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import api from "@/lib/api"
 import { Transaction } from "@/types"
 import {
@@ -9,28 +9,42 @@ import {
 import Header from "@/components/layout/Header"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Search, Loader2, DollarSign, CreditCard, Activity, ArrowRight, Download, Calendar, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
+import { DollarSign, Activity, ArrowRight, TrendingUp } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useLocations } from "@/hooks/useLocations"
 import { useAuth } from "@/lib/auth"
 import { NewPaymentDialog } from "@/components/features/payments/NewPaymentDialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useDocumentTitle } from "@/hooks/useDocumentTitle"
+import { TransactionFilters } from "@/components/features/transactions/TransactionFilters"
 
+// Interfaces aligned with TransactionFilters
 interface TransactionStats {
     total_collected_today: number;
     total_collected_month: number;
     transactions_count_today: number;
     ticket_average_month: number;
+}
+
+interface Market {
+    id: number;
+    name: string;
+    province?: string;
+    district?: string;
+}
+
+interface Agent {
+    id: number;
+    full_name: string;
+    agent_code: string;
+    assigned_market_id?: number;
+}
+
+interface POSDevice {
+    id: number;
+    serial_number: string;
+    province?: string;
+    assigned_agent_id?: number;
 }
 
 export default function TransactionsPage() {
@@ -44,12 +58,20 @@ export default function TransactionsPage() {
     const [exporting, setExporting] = useState(false)
     const [refreshing, setRefreshing] = useState(false)
 
-    // Filters
+    // Dropdown data
+    const [markets, setMarkets] = useState<Market[]>([])
+    const [agents, setAgents] = useState<Agent[]>([])
+    const [posDevices, setPosDevices] = useState<POSDevice[]>([])
+
+    // Filters State
     const [searchTerm, setSearchTerm] = useState("")
     const [statusFilter, setStatusFilter] = useState("ALL")
     const [methodFilter, setMethodFilter] = useState("ALL")
     const [provinceFilter, setProvinceFilter] = useState("ALL")
     const [districtFilter, setDistrictFilter] = useState("")
+    const [marketFilter, setMarketFilter] = useState("ALL")
+    const [agentFilter, setAgentFilter] = useState("ALL")
+    const [posFilter, setPosFilter] = useState("ALL")
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
 
@@ -64,14 +86,38 @@ export default function TransactionsPage() {
     const canPay = user?.role === "FUNCIONARIO"
     const canExport = ["ADMIN", "AUDITOR", "SUPERVISOR", "FUNCIONARIO"].includes(user?.role || "")
 
-    const handleProvinceChange = (val: string) => {
-        setSelectedProvinceId(val)
-        setProvinceFilter(val === "ALL" ? "ALL" : getProvinceNameById(val) || "")
-        setDistrictFilter("")
-    }
+    // Calculate subtotals from filtered transactions (like Excel SUBTOTAL)
+    const subtotals = useMemo(() => {
+        const successTransactions = transactions.filter(t => t.status === "SUCESSO")
+        const totalAmount = successTransactions.reduce((sum, t) => {
+            const amt = typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount ?? 0)
+            return sum + (isNaN(amt) ? 0 : amt)
+        }, 0)
+        const count = successTransactions.length
+        const avgTicket = count > 0 ? totalAmount / count : 0
 
-    const handleDistrictChange = (val: string) => {
-        setDistrictFilter(val === "ALL" ? "" : val)
+        return {
+            totalAmount,
+            count,
+            avgTicket,
+            totalTransactions: transactions.length
+        }
+    }, [transactions])
+
+    const fetchDropdownData = async () => {
+        try {
+            const [marketsRes, agentsRes, posRes] = await Promise.allSettled([
+                api.get("/markets/"),
+                api.get("/agents/"),
+                api.get("/pos-devices/")
+            ])
+
+            if (marketsRes.status === "fulfilled") setMarkets(marketsRes.value.data || [])
+            if (agentsRes.status === "fulfilled") setAgents(agentsRes.value.data || [])
+            if (posRes.status === "fulfilled") setPosDevices(posRes.value.data || [])
+        } catch (e) {
+            console.error("Failed to fetch dropdown data", e)
+        }
     }
 
     const fetchStats = async () => {
@@ -86,27 +132,25 @@ export default function TransactionsPage() {
     const fetchData = () => {
         fetchStats()
         fetchTransactions()
+        fetchDropdownData()
     }
 
-    // Initial fetch only (no auto-polling - user triggers refresh manually)
+    // Initial fetch only
     useEffect(() => {
         fetchData()
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Re-fetch when filters change (Debounced)
     useEffect(() => {
-        // We skip the first run to avoid double fetching with the polling/initial effect, 
-        // but explicit filter changes should trigger immediate (debounced) update.
-        if (loading) return // specific guard might be needed or just let it race (simplest)
+        if (loading) return
 
         const timer = setTimeout(() => {
             fetchTransactions()
         }, 500)
         return () => clearTimeout(timer)
-    }, [searchTerm, statusFilter, methodFilter, provinceFilter, districtFilter, startDate, endDate])
+    }, [searchTerm, statusFilter, methodFilter, provinceFilter, districtFilter, marketFilter, agentFilter, posFilter, startDate, endDate])
 
     const fetchTransactions = async () => {
-        // setLoading(true) // Don't show full loading spinner on background poll/refresh to avoid flickering
         try {
             const params: Record<string, string> = {}
             if (searchTerm) params.search = searchTerm
@@ -114,6 +158,9 @@ export default function TransactionsPage() {
             if (methodFilter !== "ALL") params.payment_method = methodFilter
             if (provinceFilter !== "ALL") params.province = provinceFilter
             if (districtFilter) params.district = districtFilter
+            if (marketFilter !== "ALL") params.market_id = marketFilter
+            if (agentFilter !== "ALL") params.agent_id = agentFilter
+            if (posFilter !== "ALL") params.pos_id = posFilter
             if (startDate) params.start_date = startDate
             if (endDate) params.end_date = endDate
 
@@ -121,8 +168,6 @@ export default function TransactionsPage() {
             setTransactions(res.data)
         } catch (error) {
             console.error("Error fetching transactions:", error)
-            // Do NOT clear transactions on error to avoid flashing empty table during polling failures
-            // setTransactions([]) 
         } finally {
             setLoading(false)
         }
@@ -130,7 +175,6 @@ export default function TransactionsPage() {
 
     const handleSuccessPayment = () => {
         fetchData()
-        // Force immediate refresh
     }
 
     const handleExport = async () => {
@@ -143,6 +187,9 @@ export default function TransactionsPage() {
             if (methodFilter !== "ALL") params.payment_method = methodFilter
             if (provinceFilter !== "ALL") params.province = provinceFilter
             if (districtFilter) params.district = districtFilter
+            if (marketFilter !== "ALL") params.market_id = marketFilter
+            if (agentFilter !== "ALL") params.agent_id = agentFilter
+            if (posFilter !== "ALL") params.pos_id = posFilter
 
             const response = await api.get("/transactions/export", {
                 params,
@@ -153,7 +200,6 @@ export default function TransactionsPage() {
             const link = document.createElement("a")
             link.href = url
 
-            // Extract filename from header or generate one
             const contentDisposition = response.headers["content-disposition"]
             let filename = `transacoes_${new Date().toISOString().split('T')[0]}.csv`
             if (contentDisposition) {
@@ -182,6 +228,24 @@ export default function TransactionsPage() {
         }
     }
 
+    const clearFilters = () => {
+        setSearchTerm("")
+        setSelectedProvinceId("ALL")
+        setProvinceFilter("ALL")
+        setDistrictFilter("")
+        setStatusFilter("ALL")
+        setMethodFilter("ALL")
+        setMarketFilter("ALL")
+        setAgentFilter("ALL")
+        setPosFilter("ALL")
+        setStartDate("")
+        setEndDate("")
+    }
+
+    const hasActiveFilters = searchTerm || statusFilter !== "ALL" || methodFilter !== "ALL" ||
+        provinceFilter !== "ALL" || districtFilter || marketFilter !== "ALL" ||
+        agentFilter !== "ALL" || posFilter !== "ALL" || startDate || endDate
+
     return (
         <div className="space-y-6">
             <Header
@@ -194,38 +258,58 @@ export default function TransactionsPage() {
                 }
             />
 
-            {/* KPI STATS */}
+            {/* DYNAMIC KPI STATS - Updates based on filtered data */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
+                <Card className={hasActiveFilters ? "ring-2 ring-emerald-200 bg-emerald-50/30" : ""}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Cobrado Hoje</CardTitle>
+                        <CardTitle className="text-sm font-medium">
+                            {hasActiveFilters ? "Subtotal Filtrado" : "Cobrado Hoje"}
+                        </CardTitle>
                         <DollarSign className="h-4 w-4 text-emerald-600" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(stats?.total_collected_today || 0)}
+                            {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(
+                                hasActiveFilters ? subtotals.totalAmount : (stats?.total_collected_today || 0)
+                            )}
                         </div>
+                        {hasActiveFilters && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Soma dos filtros aplicados
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className={hasActiveFilters ? "ring-2 ring-blue-200 bg-blue-50/30" : ""}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Transações Hoje</CardTitle>
+                        <CardTitle className="text-sm font-medium">
+                            {hasActiveFilters ? "Transações Filtradas" : "Transações Hoje"}
+                        </CardTitle>
                         <Activity className="h-4 w-4 text-blue-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats?.transactions_count_today || 0}</div>
+                        <div className="text-2xl font-bold">
+                            {hasActiveFilters ? subtotals.count : (stats?.transactions_count_today || 0)}
+                        </div>
+                        {hasActiveFilters && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {subtotals.totalTransactions} total ({subtotals.count} sucessos)
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className={hasActiveFilters ? "ring-2 ring-purple-200 bg-purple-50/30" : ""}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Ticket Médio (Mês)</CardTitle>
-                        <nav className="h-4 w-4 text-orange-600" />
-                        {/* nav is not icon, assume simpler icon or just empty */}
-                        <CreditCard className="h-4 w-4 text-purple-600" />
+                        <CardTitle className="text-sm font-medium">
+                            {hasActiveFilters ? "Ticket Médio (Filtrado)" : "Ticket Médio (Mês)"}
+                        </CardTitle>
+                        <TrendingUp className="h-4 w-4 text-purple-600" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(stats?.ticket_average_month || 0)}
+                            {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(
+                                hasActiveFilters ? subtotals.avgTicket : (stats?.ticket_average_month || 0)
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -242,208 +326,129 @@ export default function TransactionsPage() {
                 </Card>
             </div>
 
+            {/* FILTER COMPONENT */}
+            <TransactionFilters
+                markets={markets}
+                agents={agents}
+                posDevices={posDevices}
+                provinces={provinces}
+                municipalities={municipalities}
+
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+
+                provinceFilter={provinceFilter}
+                setProvinceFilter={(val) => {
+                    setProvinceFilter(val)
+                    setDistrictFilter("")
+                    if (val === "ALL") {
+                        setSelectedProvinceId("ALL")
+                    } else {
+                        const prov = provinces.find(p => p.name === val)
+                        if (prov) setSelectedProvinceId(prov.id.toString())
+                    }
+                }}
+
+                districtFilter={districtFilter}
+                setDistrictFilter={setDistrictFilter}
+
+                marketFilter={marketFilter}
+                setMarketFilter={setMarketFilter}
+
+                agentFilter={agentFilter}
+                setAgentFilter={setAgentFilter}
+
+                posFilter={posFilter}
+                setPosFilter={setPosFilter}
+
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+
+                methodFilter={methodFilter}
+                setMethodFilter={setMethodFilter}
+
+                startDate={startDate}
+                setStartDate={setStartDate}
+
+                endDate={endDate}
+                setEndDate={setEndDate}
+
+                onRefresh={async () => {
+                    setRefreshing(true)
+                    await fetchTransactions()
+                    setRefreshing(false)
+                    toast({ title: "✅ Dados Atualizados", description: "Transações recarregadas com sucesso." })
+                }}
+                onExport={handleExport}
+                onClear={clearFilters}
+
+                loading={loading}
+                refreshing={refreshing}
+                exporting={exporting}
+                canExport={canExport}
+            />
+
+            {/* RESULTS TABLE */}
             <Card>
-                <CardContent className="p-6">
-                    {/* FILTERS */}
-                    <div className="flex flex-col md:flex-row gap-4 mb-6 flex-wrap">
-                        <div className="relative w-full md:w-56">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar UUID..."
-                                className="pl-8"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-
-                        {/* PROVINCE FILTER */}
-                        <Select value={selectedProvinceId} onValueChange={handleProvinceChange}>
-                            <SelectTrigger className="w-full md:w-[180px]">
-                                <SelectValue placeholder="Todas Províncias" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">Todas Províncias</SelectItem>
-                                {provinces.map(p => (
-                                    <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        {/* DISTRICT FILTER */}
-                        <Select
-                            value={districtFilter || "ALL"}
-                            onValueChange={handleDistrictChange}
-                            disabled={selectedProvinceId === "ALL" || loadingMunicipalities}
-                        >
-                            <SelectTrigger className="w-full md:w-[150px]">
-                                <SelectValue placeholder={
-                                    selectedProvinceId === "ALL"
-                                        ? "Selecione Província"
-                                        : loadingMunicipalities
-                                            ? "Carregando..."
-                                            : "Todos Municípios"
-                                } />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">Todos Municípios</SelectItem>
-                                {municipalities.map(m => (
-                                    <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full md:w-[150px]">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">Todos Status</SelectItem>
-                                <SelectItem value="SUCESSO">Sucesso</SelectItem>
-                                <SelectItem value="FALHOU">Falhou</SelectItem>
-                                <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select value={methodFilter} onValueChange={setMethodFilter}>
-                            <SelectTrigger className="w-full md:w-[150px]">
-                                <SelectValue placeholder="Método" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">Todos Métodos</SelectItem>
-                                <SelectItem value="DINHEIRO">Dinheiro</SelectItem>
-                                <SelectItem value="MPESA">M-Pesa</SelectItem>
-                                <SelectItem value="EMOLA">e-Mola</SelectItem>
-                                <SelectItem value="MKESH">mKesh</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Button variant="ghost" className="text-slate-500" onClick={() => {
-                            setSearchTerm("")
-                            setProvinceFilter("ALL")
-                            setDistrictFilter("")
-                            setStatusFilter("ALL")
-                            setMethodFilter("ALL")
-                            setStartDate("")
-                            setEndDate("")
-                        }}>
-                            Limpar
-                        </Button>
-                    </div>
-
-                    {/* DATE RANGE & EXPORT FILTERS - Second row */}
-                    <div className="flex flex-col md:flex-row gap-4 mb-6 items-center flex-wrap border-t pt-4 mt-2">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">Período:</span>
-                        </div>
-                        <Input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="w-auto"
-                            placeholder="Data início"
-                        />
-                        <span className="text-muted-foreground">-</span>
-                        <Input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="w-auto"
-                            placeholder="Data fim"
-                        />
-
-                        {canExport && (
-                            <Button
-                                variant="outline"
-                                onClick={handleExport}
-                                disabled={exporting}
-                            >
-                                {exporting ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Download className="h-4 w-4 mr-2" />
-                                )}
-                                {exporting ? "Exportando..." : "Exportar CSV"}
-                            </Button>
-                        )}
-
-                        {/* CONSULTAR / REFRESH BUTTON */}
-                        <Button
-                            onClick={async () => {
-                                setRefreshing(true)
-                                await fetchTransactions()
-                                setRefreshing(false)
-                                toast({ title: "✅ Dados Atualizados", description: "Transações recarregadas com sucesso." })
-                            }}
-                            disabled={refreshing || loading}
-                            className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                            {refreshing ? "Consultando..." : "Consultar"}
-                        </Button>
-                    </div>
-
-                    {loading ? (
-                        <div className="flex justify-center py-12">
-                            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-                        </div>
-                    ) : (
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader className="bg-slate-50">
-                                    <TableRow>
-                                        <TableHead>UUID</TableHead>
-                                        <TableHead>Valor</TableHead>
-                                        <TableHead>Comerciante</TableHead>
-                                        <TableHead>Agente</TableHead>
-                                        <TableHead>Método</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Data</TableHead>
-                                        <TableHead></TableHead>
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader className="bg-slate-50">
+                            <TableRow>
+                                <TableHead className="pl-4">UUID</TableHead>
+                                <TableHead>Valor</TableHead>
+                                <TableHead>Comerciante</TableHead>
+                                <TableHead>Agente</TableHead>
+                                <TableHead>Mercado</TableHead>
+                                <TableHead>Método</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {transactions.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                                        {loading ? "Carregando..." : "Nenhuma transação encontrada com os filtros atuais."}
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                transactions.map((t) => (
+                                    <TableRow key={t.id} className="cursor-pointer hover:bg-slate-50 group" onClick={() => router.push(`/transactions/${t.transaction_uuid}`)}>
+                                        <TableCell className="font-mono text-xs text-slate-500 pl-4">
+                                            {t.transaction_uuid.substring(0, 8)}...
+                                        </TableCell>
+                                        <TableCell className="font-bold">
+                                            {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0))}
+                                        </TableCell>
+                                        <TableCell className="text-sm font-medium text-slate-700">
+                                            {t.merchant?.full_name || "N/A"}
+                                        </TableCell>
+                                        <TableCell className="text-sm text-slate-500">
+                                            {t.agent?.agent_code || t.funcionario?.full_name || "N/A"}
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {t.merchant?.market_name || "—"}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className="text-xs font-normal">{t.payment_method}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={t.status === "SUCESSO" ? "success" : t.status === "FALHOU" ? "destructive" : "secondary"}>
+                                                {t.status}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">
+                                            {new Date(t.created_at).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {transactions.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                                Nenhuma transação encontrada.
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        transactions.map((t) => (
-                                            <TableRow key={t.id} className="cursor-pointer hover:bg-slate-50 group" onClick={() => router.push(`/transactions/${t.transaction_uuid}`)}>
-                                                <TableCell className="font-mono text-xs text-slate-500">
-                                                    {t.transaction_uuid.substring(0, 8)}...
-                                                </TableCell>
-                                                <TableCell className="font-bold">
-                                                    {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(t.amount)}
-                                                </TableCell>
-                                                <TableCell className="text-sm">
-                                                    {t.merchant?.full_name || "N/A"}
-                                                </TableCell>
-                                                <TableCell className="text-sm">
-                                                    {t.agent?.agent_code || t.funcionario?.full_name || "N/A"}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className="text-xs">{t.payment_method}</Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant={t.status === "SUCESSO" ? "success" : t.status === "FALHOU" ? "destructive" : "secondary"}>
-                                                        {t.status}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground">
-                                                    {new Date(t.created_at).toLocaleString()}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
                 </CardContent>
             </Card>
         </div>

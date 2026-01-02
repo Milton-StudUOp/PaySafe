@@ -182,16 +182,16 @@ async def cancel_request(
     req.reviewed_at = datetime.now()
     req.review_notes = "Cancelado pelo solicitante"
     
-    # Audit log
-    audit = AuditLog(
-        actor_type=ActorType.ADMIN,
-        actor_id=current_user.id,
-        action="CANCEL_JURISDICTION_CHANGE",
-        entity=req.entity_type.value,
+    # Audit log using AuditService for IP capture
+    from app.services.audit_service import AuditService
+    from app.models.audit_log import Severity
+    
+    await AuditService.log_audit(
+        db, current_user, "CANCEL_JURISDICTION_CHANGE", req.entity_type.value,
+        f"Request cancelled by requester. Reverted to {req.current_province}/{req.current_district}",
         entity_id=req.entity_id,
-        description=f"Request cancelled by requester. Reverted to {req.current_province}/{req.current_district}"
+        severity=Severity.MEDIUM
     )
-    db.add(audit)
     
     await db.commit()
     
@@ -249,16 +249,16 @@ async def approve_request(
     req.reviewed_at = datetime.now()
     req.review_notes = action.notes
     
-    # Audit log
-    audit = AuditLog(
-        actor_type=ActorType.ADMIN,
-        actor_id=current_user.id,
-        action="APPROVE_JURISDICTION_CHANGE",
-        entity=req.entity_type.value,
+    # Audit log using AuditService for IP capture
+    from app.services.audit_service import AuditService
+    from app.models.audit_log import Severity
+    
+    await AuditService.log_audit(
+        db, current_user, "APPROVE_JURISDICTION_CHANGE", req.entity_type.value,
+        f"Approved jurisdiction change to {req.requested_province}/{req.requested_district}",
         entity_id=req.entity_id,
-        description=f"Approved jurisdiction change to {req.requested_province}/{req.requested_district}"
+        severity=Severity.HIGH
     )
-    db.add(audit)
     
     await db.commit()
     
@@ -329,16 +329,16 @@ async def reject_request(
     req.reviewed_at = datetime.now()
     req.review_notes = action.notes
     
-    # Audit log
-    audit = AuditLog(
-        actor_type=ActorType.ADMIN,
-        actor_id=current_user.id,
-        action="REJECT_JURISDICTION_CHANGE",
-        entity=req.entity_type.value,
+    # Audit log using AuditService for IP capture
+    from app.services.audit_service import AuditService
+    from app.models.audit_log import Severity
+    
+    await AuditService.log_audit(
+        db, current_user, "REJECT_JURISDICTION_CHANGE", req.entity_type.value,
+        f"Rejected jurisdiction change to {req.requested_province}/{req.requested_district}. Reason: {action.notes or 'N/A'}",
         entity_id=req.entity_id,
-        description=f"Rejected jurisdiction change to {req.requested_province}/{req.requested_district}. Reason: {action.notes or 'N/A'}"
+        severity=Severity.HIGH
     )
-    db.add(audit)
     
     await db.commit()
     

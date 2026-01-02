@@ -33,8 +33,11 @@ async def list_markets(
             query = query.where(MarketModel.id == -1)
             
     elif current_user.role.value == "SUPERVISOR":
+        # SUPERVISOR: Filter by district if set, otherwise by province
         if current_user.scope_district:
             query = query.where(MarketModel.district == current_user.scope_district)
+        elif current_user.scope_province:
+            query = query.where(MarketModel.province == current_user.scope_province)
     
     elif current_user.role.value == "FUNCIONARIO":
         if current_user.scope_province:
@@ -100,8 +103,11 @@ async def list_approved_active_markets(
             query = query.where(MarketModel.id == -1)
             
     elif current_user.role.value == "SUPERVISOR":
+        # SUPERVISOR: Filter by district if set, otherwise by province
         if current_user.scope_district:
             query = query.where(MarketModel.district == current_user.scope_district)
+        elif current_user.scope_province:
+            query = query.where(MarketModel.province == current_user.scope_province)
     
     elif current_user.role.value == "FUNCIONARIO":
         if current_user.scope_province:
