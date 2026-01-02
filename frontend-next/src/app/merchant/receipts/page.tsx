@@ -11,6 +11,7 @@ import { Loader2, Printer, CreditCard, CheckCircle, XCircle, X } from "lucide-re
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { QRCodeSVG } from "qrcode.react"
 
 interface Transaction {
     id: number
@@ -177,12 +178,10 @@ const ReceiptTemplate = ({ tx, isPrintCopy = false }: { tx: Transaction, isPrint
                         UUID: {tx.transaction_uuid}
                     </p>
                     <div className="flex justify-center pt-2">
-                        {/* Barcode Mockup */}
-                        <div className="h-8 w-48 bg-slate-900 opacity-90" style={{
-                            maskImage: 'repeating-linear-gradient(90deg, black, black 2px, transparent 2px, transparent 4px)'
-                        }}></div>
+                        {/* QR Code for Receipt Verification */}
+                        <ReceiptQRCode uuid={tx.transaction_uuid} />
                     </div>
-                    <p className="text-[10px] text-slate-400 pt-2">Obrigado pela preferência.</p>
+                    <p className="text-[10px] text-slate-400 pt-2">Escaneie para verificar autenticidade.</p>
                 </div>
             </div>
 
@@ -357,6 +356,56 @@ export default function MerchantReceiptsPage() {
                     <ReceiptTemplate tx={selectedTx} isPrintCopy={true} />
                 </div>
             )}
+        </div>
+    )
+}
+
+// QR Code component that fetches signed token from backend API
+function ReceiptQRCode({ uuid }: { uuid: string }) {
+    const [qrData, setQrData] = useState<string | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        const fetchQrToken = async () => {
+            try {
+                const res = await api.get(`/receipts/qr-token-by-uuid/${uuid}`)
+                setQrData(res.data.qr_token)
+                setLoading(false)
+            } catch (err) {
+                console.error('Failed to fetch QR token:', err)
+                setError('Erro')
+                setLoading(false)
+            }
+        }
+        fetchQrToken()
+    }, [uuid])
+
+    if (loading) {
+        return (
+            <div className="w-[80px] h-[80px] flex items-center justify-center bg-slate-100 rounded">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
+    if (error || !qrData) {
+        return (
+            <div className="w-[80px] h-[80px] flex items-center justify-center bg-red-50 text-red-400 text-[8px] rounded">
+                QR Error
+            </div>
+        )
+    }
+
+    return (
+        <div className="p-1 bg-white border border-slate-200 rounded inline-block">
+            <QRCodeSVG
+                value={qrData}
+                size={80}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#0f172a"
+            />
         </div>
     )
 }
