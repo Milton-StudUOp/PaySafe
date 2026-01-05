@@ -52,6 +52,7 @@ export interface Merchant {
     // Payment Status (Daily Fee - 10 MT/day)
     payment_status?: "REGULAR" | "IRREGULAR";
     last_fee_payment_date?: string;
+    billing_start_date?: string; // Date from which billing starts
     days_overdue?: number;
     overdue_balance?: number; // Exact amount overdue
     credit_balance?: number; // Surplus amount

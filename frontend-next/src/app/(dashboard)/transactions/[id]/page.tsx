@@ -288,11 +288,11 @@ export default function TransactionDetailPage() {
                                         <span className="font-mono">{transaction.payment_reference}</span>
                                     </div>
                                     {/* Only show M-Pesa/mobile reference for non-cash payments */}
-                                    {transaction.mpesa_reference && transaction.payment_method !== 'DINHEIRO' && (
+                                    {transaction.mpesa_reference && transaction.payment_method !== 'Numerario' && (
                                         <div className="flex justify-between py-1 bg-orange-50/50 text-orange-900">
-                                            <span>{transaction.payment_method === 'MPESA' ? 'M-Pesa Ref:' :
-                                                transaction.payment_method === 'EMOLA' ? 'E-Mola Ref:' :
-                                                    transaction.payment_method === 'MKESH' ? 'M-Kesh Ref:' : 'Ref. Móvel:'}</span>
+                                            <span>{transaction.payment_method === 'M-Pesa' ? 'M-Pesa Ref:' :
+                                                transaction.payment_method === 'e-Mola' ? 'E-Mola Ref:' :
+                                                    transaction.payment_method === 'mKesh' ? 'M-Kesh Ref:' : 'Ref. Móvel:'}</span>
                                             <span className="font-bold font-mono">{transaction.mpesa_reference}</span>
                                         </div>
                                     )}

@@ -64,6 +64,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RequestContextMiddleware)
 
+# Serve APK files statically from backend
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Create static directory if not exists
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
+apk_dir = os.path.join(static_dir, "apk")
+os.makedirs(apk_dir, exist_ok=True)
+
+# Mount /apk route to serve files
+app.mount("/static/apk", StaticFiles(directory=apk_dir), name="apk")
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

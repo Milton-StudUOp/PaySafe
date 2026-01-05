@@ -5,8 +5,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 import '../services/connectivity_service.dart';
+import '../services/app_update_service.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
+import 'app_update_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -46,8 +48,51 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     });
 
+    // Check for app updates if connected
+    if (isConnected) {
+      setState(() {
+        _isCheckingConnection = true;
+        _statusMessage = 'A verificar atualizações...';
+      });
+
+      try {
+        final updateService = AppUpdateService();
+        final updateResult = await updateService.checkForUpdate();
+
+        if (!mounted) return;
+
+        setState(() {
+          _isCheckingConnection = false;
+        });
+
+        // If update is required, show update screen
+        if (updateResult.status == UpdateStatus.updateRequired) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => AppUpdateScreen(updateResult: updateResult),
+            ),
+          );
+          return;
+        }
+
+        // If update is available (optional), continue normally
+        setState(() {
+          _statusMessage = 'App atualizado';
+        });
+      } catch (e) {
+        // Update check failed - continue anyway
+        debugPrint('Update check failed: $e');
+        if (mounted) {
+          setState(() {
+            _isCheckingConnection = false;
+            _statusMessage = 'Conectado';
+          });
+        }
+      }
+    }
+
     // Brief delay for splash effect
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     if (!mounted) return;
 

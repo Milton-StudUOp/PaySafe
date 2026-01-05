@@ -14,6 +14,7 @@ from .approvals import router as approvals_router
 from .locations import router as locations_router
 from .payments import router as payments_router
 from .merchant_fees import router as merchant_fees_router
+from .app_updates import router as app_updates_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -30,5 +31,6 @@ api_router.include_router(approvals_router)
 api_router.include_router(locations_router)
 api_router.include_router(payments_router)
 api_router.include_router(merchant_fees_router)
+api_router.include_router(app_updates_router)
 
 

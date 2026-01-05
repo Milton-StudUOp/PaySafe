@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// Application constants and configuration.
 /// Supports remote server configuration via settings.
@@ -7,9 +8,18 @@ class AppConstants {
   // Using template placeholder {server}
   static const String _defaultBaseUrl = "http://{server}:8000/api/v1";
 
-  // App version - displayed in splash screen
-  static const String appVersion = "1.0.0";
-  static const String appBuildNumber = "1";
+  // App version - loaded dynamically from pubspec.yaml
+  static String _appVersion = "1.0.0";
+  static String _appBuildNumber = "1";
+
+  /// Get the current app version (from pubspec.yaml)
+  static String get appVersion => _appVersion;
+
+  /// Get the current build number (from pubspec.yaml)
+  static String get appBuildNumber => _appBuildNumber;
+
+  /// Get full version string (e.g., "1.0.36+7")
+  static String get fullVersion => "$_appVersion+$_appBuildNumber";
 
   // Preference keys
   static const String _serverUrlKey = 'server_url';
@@ -28,6 +38,15 @@ class AppConstants {
   static Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     _cachedServerUrl = prefs.getString(_serverUrlKey);
+
+    // Load version from package info
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _appVersion = packageInfo.version;
+      _appBuildNumber = packageInfo.buildNumber;
+    } catch (e) {
+      // Keep defaults if fails
+    }
   }
 
   /// Set a custom server URL.

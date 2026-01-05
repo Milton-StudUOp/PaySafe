@@ -145,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Logo or Header
                 Text(
-                  "PAYSAFE",
+                  "PAYSAFE PREMIUM",
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

@@ -11,8 +11,12 @@ export function middleware(request: NextRequest) {
 
     console.log(`[Middleware] Processing ${pathname} | Token: ${!!token} | Role: ${userRole}`)
 
-    // 1. Public Paths (Login, etc.)
-    if (pathname.startsWith('/login') || pathname.startsWith('/merchant/login') || pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')) {
+    // 1. Public Paths (Login, static files, APK downloads)
+    if (pathname.startsWith('/login') ||
+        pathname.startsWith('/merchant/login') ||
+        pathname.startsWith('/_next') ||
+        pathname.startsWith('/favicon.ico') ||
+        pathname.startsWith('/apk')) {  // Allow APK downloads without auth
         // If user is already logged in, redirect to their dashboard
         if (token && userRole) {
             if (pathname === '/login' || pathname === '/merchant/login') {
