@@ -5,6 +5,7 @@ from typing import List, Optional
 from datetime import date, datetime, timedelta
 
 from app.database import get_db
+from sqlalchemy import or_
 from app.models import (
     Transaction as TransactionModel,
     Merchant as MerchantModel,
@@ -17,20 +18,37 @@ from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
-def apply_jurisdiction_filter(query, user: UserModel, market_model=MarketModel):
+def apply_jurisdiction_filter(query, user: UserModel, market_model=MarketModel, merchant_model=None):
     """
     Applies jurisdiction filters (province/district) based on user scope.
-    Requires the query to have access to MarketModel (via join or direct).
+    Supports both Market-based and Merchant-based location filtering for Cidadão.
     """
     # Admin without specific scope sees all
     if user.role.value == "ADMIN" and not user.scope_province:
         return query
     
     if user.scope_province:
-        query = query.where(market_model.province == user.scope_province)
+        if merchant_model:
+            # Check both market and merchant location for Cidadão support
+            query = query.where(
+                or_(
+                    market_model.province == user.scope_province,
+                    merchant_model.province == user.scope_province
+                )
+            )
+        else:
+            query = query.where(market_model.province == user.scope_province)
     
     if user.scope_district:
-        query = query.where(market_model.district == user.scope_district)
+        if merchant_model:
+            query = query.where(
+                or_(
+                    market_model.district == user.scope_district,
+                    merchant_model.district == user.scope_district
+                )
+            )
+        else:
+            query = query.where(market_model.district == user.scope_district)
         
     return query
 
@@ -45,19 +63,21 @@ async def get_dashboard_stats(
     tx_base_query = (
         select(TransactionModel)
         .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
     )
     
     # Revenue Today
     revenue_query = apply_jurisdiction_filter(
         select(func.sum(TransactionModel.amount))
         .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
         .where(
             func.date(TransactionModel.created_at) == today,
             TransactionModel.status == 'SUCESSO'
         ),
-        current_user
+        current_user,
+        MarketModel,
+        MerchantModel
     )
     revenue_today = await db.scalar(revenue_query) or 0.0
 
@@ -65,9 +85,11 @@ async def get_dashboard_stats(
     tx_query = apply_jurisdiction_filter(
         select(func.count(TransactionModel.id))
         .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
         .where(func.date(TransactionModel.created_at) == today),
-        current_user
+        current_user,
+        MarketModel,
+        MerchantModel
     )
     tx_today = await db.scalar(tx_query) or 0
 
@@ -78,12 +100,14 @@ async def get_dashboard_stats(
     paying_merchants_query = apply_jurisdiction_filter(
         select(func.count(func.distinct(TransactionModel.merchant_id)))
         .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
         .where(
             func.date(TransactionModel.created_at) == today,
             TransactionModel.status == 'SUCESSO'
         ),
-        current_user
+        current_user,
+        MarketModel,
+        MerchantModel
     )
     paying_merchants = await db.scalar(paying_merchants_query) or 0
 
@@ -111,12 +135,14 @@ async def get_dashboard_stats(
     
     active_pos = await db.scalar(active_pos_base) or 0
 
-    # Actives - MERCHANTS
+    # Actives - MERCHANTS (include Cidadão without market)
     active_merchants_query = apply_jurisdiction_filter(
         select(func.count(MerchantModel.id))
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
         .where(MerchantModel.status == 'ATIVO'),
-        current_user
+        current_user,
+        MarketModel,
+        MerchantModel
     )
     active_merchants = await db.scalar(active_merchants_query) or 0
 
@@ -315,7 +341,7 @@ async def get_revenue_chart(
             func.sum(TransactionModel.amount).label("revenue")
         )
         .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
         .where(
             func.date(TransactionModel.created_at) >= start_date,
             TransactionModel.status == 'SUCESSO'
@@ -324,7 +350,7 @@ async def get_revenue_chart(
         .order_by("date")
     )
     
-    stmt = apply_jurisdiction_filter(stmt, current_user, MarketModel)
+    stmt = apply_jurisdiction_filter(stmt, current_user, MarketModel, MerchantModel)
     
     result = await db.execute(stmt)
     rows = result.all()
@@ -361,7 +387,7 @@ async def get_hourly_chart(
                 func.count(TransactionModel.id).label("count")
             )
             .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-            .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+            .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
             .where(
                 func.date(TransactionModel.created_at) == today,
                 TransactionModel.status == 'SUCESSO'
@@ -370,7 +396,7 @@ async def get_hourly_chart(
             .order_by("hour")
         )
         
-        stmt = apply_jurisdiction_filter(stmt, current_user, MarketModel)
+        stmt = apply_jurisdiction_filter(stmt, current_user, MarketModel, MerchantModel)
         
         result = await db.execute(stmt)
         rows = result.all()
@@ -406,12 +432,12 @@ async def get_payment_methods_chart(
             func.count(TransactionModel.id).label("count")
         )
         .join(MerchantModel, TransactionModel.merchant_id == MerchantModel.id)
-        .join(MarketModel, MerchantModel.market_id == MarketModel.id)
+        .outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
         .where(func.date(TransactionModel.created_at) == today)
         .group_by(TransactionModel.payment_method)
     )
     
-    stmt = apply_jurisdiction_filter(stmt, current_user, MarketModel)
+    stmt = apply_jurisdiction_filter(stmt, current_user, MarketModel, MerchantModel)
     
     result = await db.execute(stmt)
     rows = result.all()

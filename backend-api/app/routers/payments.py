@@ -31,6 +31,9 @@ class PaymentRequest(BaseModel):
     # Offline Audit Fields: preserve client-generated identifiers
     offline_transaction_uuid: Optional[str] = Field(default=None, description="UUID generated on POS device")
     offline_payment_reference: Optional[str] = Field(default=None, description="Reference generated on POS device (PS-YYYYMMDD-XXXXXX)")
+    
+    # Tax Information
+    tax_code: Optional[str] = None
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def initiate_payment(
@@ -39,7 +42,7 @@ async def initiate_payment(
     current_user: UserModel = Depends(get_current_user)
 ):
     # 1. Security & Role Check
-    allowed_roles = ["FUNCIONARIO", "AGENTE"]
+    allowed_roles = ["FUNCIONARIO", "AGENTE", "MERCHANT"]
     if current_user.role.value not in allowed_roles:
         await AuditService.log_audit(
             db, current_user, "PAYMENT_UNAUTHORIZED", "PAYMENT",
@@ -68,11 +71,29 @@ async def initiate_payment(
     # Jurisdiction Check
     # AGENTE: Can only charge merchants in their assigned market
     # FUNCIONARIO: Can charge merchants in their province (and district if scoped)
-    market = await db.get(Market, merchant.market_id)
-    if not market:
-         raise HTTPException(status_code=400, detail="Merchant has no assigned market")
+    market = None
+    if merchant.market_id:
+        market = await db.get(Market, merchant.market_id)
     
-    if current_user.role.value == "AGENTE":
+    if not market and merchant.merchant_type != "CIDADAO":
+         raise HTTPException(status_code=400, detail="Merchant has no assigned market")
+         
+    target_province = market.province if market else merchant.province
+    target_district = market.district if market else merchant.district
+    
+    if current_user.role.value == "MERCHANT":
+        # Merchant self-payment: Only allow paying for their own account
+        # current_user is actually a Merchant object here
+        if current_user.id != merchant.id:
+            await AuditService.log_audit(
+                db, current_user, "PAYMENT_UNAUTHORIZED", "PAYMENT",
+                f"Merchant {current_user.id} attempted to pay for Merchant {merchant.id}",
+                severity=Severity.HIGH,
+                event_type=EventType.SECURITY
+            )
+            raise HTTPException(status_code=403, detail="You can only pay for your own account")
+        # Skip jurisdiction checks for self-payment
+    elif current_user.role.value == "AGENTE":
         # Market-level scope for Agents
         if hasattr(current_user, 'scope_market_id') and current_user.scope_market_id:
             if merchant.market_id != current_user.scope_market_id:
@@ -87,19 +108,19 @@ async def initiate_payment(
             # Agent without market assignment
             raise HTTPException(status_code=403, detail="No market assigned to your account")
     
-    elif current_user.scope_province:
+    elif hasattr(current_user, 'scope_province') and current_user.scope_province:
         # Province-level scope for FUNCIONARIO
-        if market.province != current_user.scope_province:
+        if target_province != current_user.scope_province:
              await AuditService.log_audit(
                 db, current_user, "PAYMENT_JURISDICTION_FAIL", "PAYMENT",
-                f"Attempt to charge merchant {merchant.id} in {market.province} (User scope: {current_user.scope_province})",
+                f"Attempt to charge merchant {merchant.id} in {target_province} (User scope: {current_user.scope_province})",
                 severity=Severity.HIGH,
                 event_type=EventType.SECURITY
             )
              raise HTTPException(status_code=403, detail="Merchant outside your jurisdiction")
         
         # If user has district scope, check that too
-        if current_user.scope_district and market.district != current_user.scope_district:
+        if current_user.scope_district and target_district != current_user.scope_district:
             raise HTTPException(status_code=403, detail="Merchant outside your district scope")
 
     # POS (Optional for Web Payment)
@@ -148,13 +169,15 @@ async def initiate_payment(
         status=TransactionStatus.PENDING,
         payment_reference=reference, # Our reference
         mpesa_reference=None, # Filled later
-        province=market.province, # Snapshot location
-        district=market.district,
+        province=target_province, # Snapshot location
+        district=target_district,
+        tax_code=payment.tax_code, # Tax Integration
+        tax_year=datetime.now().year if payment.tax_code else None,
         # Offline Audit Fields - preserve client-generated values
         offline_transaction_uuid=payment.offline_transaction_uuid,
         offline_payment_reference=payment.offline_payment_reference,
         offline_created_at=tx_created_at,  # Already parsed above
-        request_payload={"msisdn": payment.mpesa_number, "obs": payment.observation, "method": payment.payment_method, "is_offline_sync": payment.offline_created_at is not None}
+        request_payload={"msisdn": payment.mpesa_number, "obs": payment.observation, "method": payment.payment_method, "is_offline_sync": payment.offline_created_at is not None, "tax_code": payment.tax_code}
     )
     # Override created_at if this is an offline sync
     if tx_created_at:

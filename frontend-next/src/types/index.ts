@@ -14,13 +14,15 @@ export interface User {
 export interface Merchant {
     id: number;
     full_name: string;
-    merchant_type: "FIXO" | "AMBULANTE";
+    merchant_type: "FIXO" | "AMBULANTE" | "CIDADAO";
     business_type?: string;
     business_name?: string;  // Nome Comercial
     market_id?: number;
     market_name?: string; // Enriched
     market_province?: string; // Enriched
     market_district?: string; // Enriched
+    province?: string; // For Cidadão or Snapshot
+    district?: string; // For Cidadão or Snapshot
     phone_number?: string;
     status: "ATIVO" | "INATIVO" | "SUSPENSO" | "BLOQUEADO";
     nfc_uid?: string;
@@ -132,6 +134,7 @@ export interface Transaction {
     transaction_uuid: string;
     merchant_id: number;
     agent_id: number;
+    funcionario_id?: number;
     pos_id: number;
     amount: number;
     currency: string;
@@ -150,6 +153,8 @@ export interface Transaction {
     // Payloads
     request_payload?: any;
     response_payload?: any;
+    tax_code?: string;
+    tax_name?: string;
     merchant?: Merchant;
     agent?: Agent;
     funcionario?: User;

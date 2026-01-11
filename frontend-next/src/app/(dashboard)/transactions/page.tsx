@@ -62,6 +62,7 @@ export default function TransactionsPage() {
     const [markets, setMarkets] = useState<Market[]>([])
     const [agents, setAgents] = useState<Agent[]>([])
     const [posDevices, setPosDevices] = useState<POSDevice[]>([])
+    const [taxes, setTaxes] = useState<{ code: string; name: string }[]>([])
 
     // Filters State
     const [searchTerm, setSearchTerm] = useState("")
@@ -72,6 +73,7 @@ export default function TransactionsPage() {
     const [marketFilter, setMarketFilter] = useState("ALL")
     const [agentFilter, setAgentFilter] = useState("ALL")
     const [posFilter, setPosFilter] = useState("ALL")
+    const [taxCodeFilter, setTaxCodeFilter] = useState("ALL")
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
 
@@ -85,6 +87,24 @@ export default function TransactionsPage() {
     const { user } = useAuth()
     const canPay = user?.role === "FUNCIONARIO"
     const canExport = ["ADMIN", "AUDITOR", "SUPERVISOR", "FUNCIONARIO"].includes(user?.role || "")
+
+    // Format tax code to readable name
+    const formatTaxName = (code?: string) => {
+        if (!code) return "—"
+        const upperCode = code.toUpperCase()
+        const taxNames: Record<string, string> = {
+            'TAXA_MERCADO': 'Taxa de Mercado',
+            'TAXA_LIXO': 'Taxa de Lixo',
+            'TAXA_ACTIVIDADES': 'Taxa de Actividades',
+            'TAXA_LICENCA': 'Taxa de Licença',
+            'TAXA_PUBLICIDADE': 'Taxa de Publicidade',
+            'TAXA_OCUPACAO': 'Taxa de Ocupação',
+            'GENERAL': 'Pagamento Geral',
+            'TAXA MERCADO': 'Taxa de Mercado',
+            'MERCADO': 'Taxa de Mercado'
+        }
+        return taxNames[upperCode] || code.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+    }
 
     // Calculate subtotals from filtered transactions (like Excel SUBTOTAL)
     const subtotals = useMemo(() => {
@@ -106,15 +126,17 @@ export default function TransactionsPage() {
 
     const fetchDropdownData = async () => {
         try {
-            const [marketsRes, agentsRes, posRes] = await Promise.allSettled([
+            const [marketsRes, agentsRes, posRes, taxesRes] = await Promise.allSettled([
                 api.get("/markets/"),
                 api.get("/agents/"),
-                api.get("/pos-devices/")
+                api.get("/pos-devices/"),
+                api.get("/taxes/")
             ])
 
             if (marketsRes.status === "fulfilled") setMarkets(marketsRes.value.data || [])
             if (agentsRes.status === "fulfilled") setAgents(agentsRes.value.data || [])
             if (posRes.status === "fulfilled") setPosDevices(posRes.value.data || [])
+            if (taxesRes.status === "fulfilled") setTaxes(taxesRes.value.data || [])
         } catch (e) {
             console.error("Failed to fetch dropdown data", e)
         }
@@ -148,7 +170,7 @@ export default function TransactionsPage() {
             fetchTransactions()
         }, 500)
         return () => clearTimeout(timer)
-    }, [searchTerm, statusFilter, methodFilter, provinceFilter, districtFilter, marketFilter, agentFilter, posFilter, startDate, endDate])
+    }, [searchTerm, statusFilter, methodFilter, provinceFilter, districtFilter, marketFilter, agentFilter, posFilter, taxCodeFilter, startDate, endDate])
 
     const fetchTransactions = async () => {
         try {
@@ -161,6 +183,7 @@ export default function TransactionsPage() {
             if (marketFilter !== "ALL") params.market_id = marketFilter
             if (agentFilter !== "ALL") params.agent_id = agentFilter
             if (posFilter !== "ALL") params.pos_id = posFilter
+            if (taxCodeFilter !== "ALL") params.tax_code = taxCodeFilter
             if (startDate) params.start_date = startDate
             if (endDate) params.end_date = endDate
 
@@ -238,13 +261,14 @@ export default function TransactionsPage() {
         setMarketFilter("ALL")
         setAgentFilter("ALL")
         setPosFilter("ALL")
+        setTaxCodeFilter("ALL")
         setStartDate("")
         setEndDate("")
     }
 
     const hasActiveFilters = searchTerm || statusFilter !== "ALL" || methodFilter !== "ALL" ||
         provinceFilter !== "ALL" || districtFilter || marketFilter !== "ALL" ||
-        agentFilter !== "ALL" || posFilter !== "ALL" || startDate || endDate
+        agentFilter !== "ALL" || posFilter !== "ALL" || taxCodeFilter !== "ALL" || startDate || endDate
 
     return (
         <div className="space-y-6">
@@ -331,6 +355,7 @@ export default function TransactionsPage() {
                 markets={markets}
                 agents={agents}
                 posDevices={posDevices}
+                taxes={taxes}
                 provinces={provinces}
                 municipalities={municipalities}
 
@@ -367,6 +392,9 @@ export default function TransactionsPage() {
                 methodFilter={methodFilter}
                 setMethodFilter={setMethodFilter}
 
+                taxCodeFilter={taxCodeFilter}
+                setTaxCodeFilter={setTaxCodeFilter}
+
                 startDate={startDate}
                 setStartDate={setStartDate}
 
@@ -394,54 +422,72 @@ export default function TransactionsPage() {
                     <Table>
                         <TableHeader className="bg-slate-50">
                             <TableRow>
-                                <TableHead className="pl-4">UUID</TableHead>
-                                <TableHead>Valor</TableHead>
-                                <TableHead>Comerciante</TableHead>
-                                <TableHead>Agente</TableHead>
-                                <TableHead>Mercado</TableHead>
-                                <TableHead>Método</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Data</TableHead>
+                                <TableHead className="text-center">UUID</TableHead>
+                                <TableHead className="text-center">Valor</TableHead>
+                                <TableHead className="text-center">Comerciante</TableHead>
+                                <TableHead className="text-center">Agente</TableHead>
+                                <TableHead className="text-center">Mercado</TableHead>
+                                <TableHead className="text-center">Método</TableHead>
+                                <TableHead className="text-center">Tipo</TableHead>
+                                <TableHead className="text-center">Status</TableHead>
+                                <TableHead className="text-center">Data</TableHead>
                                 <TableHead></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {transactions.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                                         {loading ? "Carregando..." : "Nenhuma transação encontrada com os filtros atuais."}
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 transactions.map((t) => (
                                     <TableRow key={t.id} className="cursor-pointer hover:bg-slate-50 group" onClick={() => router.push(`/transactions/${t.transaction_uuid}`)}>
-                                        <TableCell className="font-mono text-xs text-slate-500 pl-4">
+                                        <TableCell className="font-mono text-xs text-slate-500 text-center">
                                             {t.transaction_uuid.substring(0, 8)}...
                                         </TableCell>
-                                        <TableCell className="font-bold">
+                                        <TableCell className="font-bold text-center">
                                             {new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0))}
                                         </TableCell>
-                                        <TableCell className="text-sm font-medium text-slate-700">
+                                        <TableCell className="text-sm font-medium text-slate-700 text-center">
                                             {t.merchant?.full_name || "N/A"}
                                         </TableCell>
-                                        <TableCell className="text-sm text-slate-500">
-                                            {t.agent?.agent_code || t.funcionario?.full_name || "N/A"}
+                                        <TableCell className="text-sm text-slate-500 text-center">
+                                            {t.agent?.agent_code
+                                                ? t.agent.agent_code
+                                                : t.funcionario?.full_name
+                                                    ? t.funcionario.full_name
+                                                    : t.funcionario_id
+                                                        ? `Func. #${t.funcionario_id}`
+                                                        : "Auto Pagamento"}
                                         </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {t.merchant?.market_name || "—"}
+                                        <TableCell className="text-sm text-muted-foreground text-center">
+                                            {t.merchant?.market_name || (t.merchant?.province ? `${t.merchant.district || t.merchant.province}` : "—")}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="text-center">
                                             <Badge variant="outline" className="text-xs font-normal">{t.payment_method}</Badge>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="text-center">
+                                            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                                {t.tax_name
+                                                    ? t.tax_name
+                                                    : t.tax_code
+                                                        ? formatTaxName(t.tax_code)
+                                                        : t.pos_id
+                                                            ? "Taxa de Mercado (Diária)"
+                                                            : "Taxa de Mercado (Diária)"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-center">
                                             <Badge variant={t.status === "SUCESSO" ? "success" : t.status === "FALHOU" ? "destructive" : "secondary"}>
                                                 {t.status}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
+                                        <TableCell className="text-xs text-muted-foreground text-center">
                                             {new Date(t.created_at).toLocaleString()}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="text-center">
                                             <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
                                         </TableCell>
                                     </TableRow>

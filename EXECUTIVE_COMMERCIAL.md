@@ -150,7 +150,7 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 │  │             │    │             │    │                     │  │
 │  │ • Cobrança  │    │ • Dashboard │    │ • M-Pesa            │  │
 │  │ • Recibos   │←──→│ • Gestão    │←──→│ • e-Mola            │  │
-│  │ • NFC       │    │ • Relatórios│    │                     │  │
+│  │ • NFC       │    │ • Relatórios│    │ • M-Kesh            │
 │  │             │    │ • Auditoria │    │                     │  │
 │  └─────────────┘    └─────────────┘    └─────────────────────┘  │
 │         │                  │                      │              │
@@ -175,19 +175,6 @@ O PaySafe é uma **solução end-to-end** que digitaliza todo o ciclo de cobran�
 | **Integrações** | Pagamentos móveis | M-Pesa, e-Mola |
 
 ### 4.3 Fluxo de Operação
-
-```
-1. REGISTO                    2. COBRANÇA                   3. RECONCILIAÇÃO
-   ┌─────┐                       ┌─────┐                       ┌─────┐
-   │     │  Comerciante          │     │  Agente POS           │     │  Dashboard
-   │ 📝  │  registado            │ 💳  │  cobra taxa           │ 📊  │  atualizado
-   │     │  no sistema           │     │  via terminal         │     │  em tempo real
-   └─────┘                       └─────┘                       └─────┘
-      │                             │                             │
-      ▼                             ▼                             ▼
-   Cartão NFC              Recibo digital            Relatórios automáticos
-   emitido                                           + Auditoria completa
-```
 
 ---
 

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth"
-import { Wallet, Receipt, User, Key, Calendar, Activity, FileText, Loader2 } from "lucide-react"
+import { Wallet, Receipt, User, Key, Calendar, Activity, FileText, Loader2, Banknote } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import api from "@/lib/api"
+import { PayTaxDialog } from "@/components/forms/PayTaxDialog"
 
 interface MerchantStats {
     current_balance: number
@@ -20,6 +21,7 @@ interface MerchantStats {
     days_overdue: number
     overdue_balance: number
     credit_balance: number
+    merchant_type?: 'FIXO' | 'AMBULANTE' | 'CIDADAO'
 }
 
 export default function MerchantDashboard() {
@@ -96,7 +98,8 @@ export default function MerchantDashboard() {
                     payment_status: merchant.payment_status || 'REGULAR',
                     days_overdue: merchant.days_overdue || 0,
                     overdue_balance: merchant.overdue_balance || 0,
-                    credit_balance: merchant.credit_balance || 0
+                    credit_balance: merchant.credit_balance || 0,
+                    merchant_type: merchant.merchant_type
                 })
             } catch (error) {
                 console.error("Erro ao carregar dados:", error)
@@ -171,11 +174,18 @@ export default function MerchantDashboard() {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">Painel do Comerciante</h1>
+                    <h1 className="text-2xl font-bold text-foreground">Painel do Usuário</h1>
                     <p className="text-muted-foreground mt-1">Bem-vindo, {user?.full_name}</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button asChild variant="default" className="bg-emerald-600 hover:bg-emerald-700">
+                    <PayTaxDialog merchantId={user?.id || 0}>
+                        <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold">
+                            <Banknote className="mr-2 h-4 w-4" />
+                            Pagar Taxa Municipal
+                        </Button>
+                    </PayTaxDialog>
+
+                    <Button asChild variant="outline" className="border-emerald-600 text-emerald-600 hover:bg-emerald-50">
                         <Link href="/merchant/receipts">
                             <Receipt className="mr-2 h-4 w-4" /> Meus Recibos
                         </Link>
@@ -214,14 +224,19 @@ export default function MerchantDashboard() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Tax Payment Button - Desktop */}
+
                         {/* Decoration */}
                         <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none">
                             <Receipt className="w-64 h-64 -mb-12 -mr-12 rotate-12" />
                         </div>
                     </div>
+                    {/* Tax Payment Button - Mobile */}
+
 
                     {/* Secondary Stats Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
 
                         {/* Last Payment */}
                         <Card>
@@ -239,21 +254,23 @@ export default function MerchantDashboard() {
                             </CardContent>
                         </Card>
 
-                        {/* Status - Dynamic Payment Status */}
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Situação</CardTitle>
-                                <Activity className={`h-4 w-4 ${stats?.payment_status === 'REGULAR' ? 'text-emerald-500' : 'text-red-500'}`} />
-                            </CardHeader>
-                            <CardContent>
-                                <div className={`text-2xl font-bold ${stats?.payment_status === 'REGULAR' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {stats?.payment_status === 'REGULAR' ? 'Regular' : 'Irregular'}
-                                </div>
-                                <p className={`text-xs mt-1 ${stats?.payment_status === 'REGULAR' && (stats?.credit_balance || 0) > 0 ? 'text-emerald-600 font-medium' : stats?.payment_status !== 'REGULAR' ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
-                                    {getPaymentStatusMessage(stats?.payment_status || 'REGULAR', stats?.days_overdue || 0, stats?.overdue_balance || 0, stats?.credit_balance || 0)}
-                                </p>
-                            </CardContent>
-                        </Card>
+                        {/* Status - Dynamic Payment Status - ONLY FOR NON-CIDADAO */}
+                        {stats?.merchant_type !== 'CIDADAO' && (
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Situação</CardTitle>
+                                    <Activity className={`h-4 w-4 ${stats?.payment_status === 'REGULAR' ? 'text-emerald-500' : 'text-red-500'}`} />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className={`text-2xl font-bold ${stats?.payment_status === 'REGULAR' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        {stats?.payment_status === 'REGULAR' ? 'Regular' : 'Irregular'}
+                                    </div>
+                                    <p className={`text-xs mt-1 ${stats?.payment_status === 'REGULAR' && (stats?.credit_balance || 0) > 0 ? 'text-emerald-600 font-medium' : stats?.payment_status !== 'REGULAR' ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                                        {getPaymentStatusMessage(stats?.payment_status || 'REGULAR', stats?.days_overdue || 0, stats?.overdue_balance || 0, stats?.credit_balance || 0)}
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Saldo 
                         <Card>
@@ -272,11 +289,12 @@ export default function MerchantDashboard() {
                         </Card> */}
                     </div>
                 </>
-            )}
+            )
+            }
 
             {/* Quick Actions / Management Grid */}
             <h2 className="text-lg font-semibold text-foreground mt-4">Gestão da Conta</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
 
                 {/* Profile Card */}
                 <Link href="/merchant/profile" className="block group">
@@ -324,6 +342,6 @@ export default function MerchantDashboard() {
                 </Link>
 
             </div>
-        </div>
+        </div >
     )
 }

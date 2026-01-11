@@ -27,7 +27,7 @@ async def list_merchants(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
-    query = select(MerchantModel).join(MarketModel, MerchantModel.market_id == MarketModel.id)
+    query = select(MerchantModel).outerjoin(MarketModel, MerchantModel.market_id == MarketModel.id)
     
     # 0. Search Filter (Global)
     if search:
@@ -43,9 +43,9 @@ async def list_merchants(
     
     # 1. Admin/Client Side Filters
     if province:
-        query = query.where(MarketModel.province == province)
+        query = query.where(or_(MarketModel.province == province, MerchantModel.province == province))
     if district:
-        query = query.where(MarketModel.district.ilike(f"%{district}%"))
+        query = query.where(or_(MarketModel.district.ilike(f"%{district}%"), MerchantModel.district.ilike(f"%{district}%")))
 
     # 2. RBAC Location Scoping (Enforced)
     # AGENTE: Most restricted - only their assigned market
@@ -69,10 +69,21 @@ async def list_merchants(
     elif current_user.role.value == "FUNCIONARIO":
         # FUNCIONARIO must have province scope
         if current_user.scope_province:
-            query = query.where(MarketModel.province == current_user.scope_province)
+            # Include merchants by market province OR by merchant.province (for Cidadão without market)
+            query = query.where(
+                or_(
+                    MarketModel.province == current_user.scope_province,
+                    MerchantModel.province == current_user.scope_province
+                )
+            )
             # Additionally, if district is set, filter by district too (exact VLOOKUP match)
             if current_user.scope_district:
-                query = query.where(MarketModel.district == current_user.scope_district)
+                query = query.where(
+                    or_(
+                        MarketModel.district == current_user.scope_district,
+                        MerchantModel.district == current_user.scope_district
+                    )
+                )
         else:
             # SAFETY: If employee has no province, they see NOTHING.
             query = query.where(MerchantModel.id == -1)
@@ -134,14 +145,50 @@ async def create_merchant(
         from app.models.jurisdiction_change_request import RequestType
         from app.models import Market as MarketModel
         
-        market_res = await db.execute(select(MarketModel).where(MarketModel.id == merchant.market_id))
-        target_market = market_res.scalar_one_or_none()
-        if not target_market:
-             raise HTTPException(status_code=404, detail="Market not found")
+        # Jurisdiction & Location Logic
+        from app.models import JurisdictionChangeRequest, ApprovalStatus, EntityType, AuditLog, ActorType
+        from app.models.jurisdiction_change_request import RequestType
+        from app.models import Market as MarketModel
+        
+        target_market = None
+        requested_province = None
+        requested_district = None
+
+        if merchant.merchant_type == "CIDADAO":
+             if merchant.market_id:
+                  market_res = await db.execute(select(MarketModel).where(MarketModel.id == merchant.market_id))
+                  target_market = market_res.scalar_one_or_none()
+                  if target_market:
+                       requested_province = target_market.province
+                       requested_district = target_market.district
+             
+             if not target_market:
+                  # Infer from User Scope (standard behavior) or Payload
+                  # Logic: "atualmente ao ser cadastrado ele já considerava provincia do usuario"
+                  requested_province = merchant.province or current_user.scope_province or "Maputo"
+                  requested_district = merchant.district or current_user.scope_district or "KaMpfumo"
+                  
+                  data["market_id"] = None
+                  data["province"] = requested_province
+                  data["district"] = requested_district
+        else:
+             # FIXO / AMBULANTE
+             if not merchant.market_id:
+                  raise HTTPException(status_code=400, detail="É obrigatório selecionar um mercado para este tipo de comerciante.")
+             
+             market_res = await db.execute(select(MarketModel).where(MarketModel.id == merchant.market_id))
+             target_market = market_res.scalar_one_or_none()
+             if not target_market:
+                  raise HTTPException(status_code=404, detail="Market not found")
+             
+             requested_province = target_market.province
+             requested_district = target_market.district
+
         
         is_admin = current_user.role.value == "ADMIN"
         
-        requested_province = target_market.province
+        # requested_province = target_market.province  <-- REMOVED
+        user_province = current_user.scope_province
         user_province = current_user.scope_province
         
         out_of_jurisdiction = False
@@ -164,7 +211,7 @@ async def create_merchant(
                 current_province=user_province,
                 current_district=current_user.scope_district,
                 requested_province=requested_province,
-                requested_district=target_market.district,
+                requested_district=requested_district,
                 requested_by_user_id=current_user.id,
                 request_type=RequestType.CREATE,
                 requester_notes=merchant.requester_notes

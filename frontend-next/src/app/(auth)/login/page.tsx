@@ -88,7 +88,7 @@ export default function LoginPage() {
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                         }`}
                 >
-                    Comerciante
+                    Usuário
                 </button>
                 <button
                     type="button"

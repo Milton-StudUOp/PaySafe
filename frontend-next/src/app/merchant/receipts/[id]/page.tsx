@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { QRCodeSVG } from "qrcode.react"
 
-export default function TransactionDetailPage() {
+export default function MerchantTransactionDetailPage() {
     const { id } = useParams() // UUID
     const router = useRouter()
     const { toast } = useToast()
@@ -102,6 +102,7 @@ export default function TransactionDetailPage() {
     const statusBg = isSuccess ? 'bg-emerald-50' : 'bg-red-50'
     const statusBorder = isSuccess ? 'border-emerald-100' : 'border-red-100'
 
+    // Smart Resolvers
     // Smart Resolvers
     let responsibleName = transaction.agent?.full_name || transaction.funcionario?.full_name
     let responsibleRole = transaction.agent ? "Agente Oficial" : (transaction.funcionario ? "Funcionário (Backoffice)" : null)
@@ -282,7 +283,7 @@ export default function TransactionDetailPage() {
                             <div className="space-y-2 relative z-10 my-3">
                                 {/* Merchant Info */}
                                 <div className="space-y-1">
-                                    <p className="text-[10px] uppercase text-slate-400 font-bold">Comerciante</p>
+                                    <p className="text-[10px] uppercase text-slate-400 font-bold">Usuário</p>
                                     <div className="flex justify-between items-baseline border-b border-dashed border-slate-200 pb-1">
                                         <span className="font-bold">{transaction.merchant?.full_name}</span>
                                     </div>
@@ -380,10 +381,6 @@ export default function TransactionDetailPage() {
                             maskRepeat: 'repeat-x',
                             maskPosition: '0 100%'
                         }}>
-                            {/* Styling trick: This div effectively cuts the receipt if background was different, 
-                                 but here we want the SHAPE. 
-                                 Better approach for white receipt on gray background:
-                              */}
                         </div>
                         {/* SVG Solution for clean zigzag */}
                         <div className="absolute -bottom-3 left-0 w-full h-3 overflow-hidden">
@@ -426,11 +423,11 @@ export default function TransactionDetailPage() {
 
                     {/* Entities Links */}
                     <div className="grid grid-cols-2 gap-4">
-                        <Button variant="outline" className="h-auto py-3 flex flex-col items-center gap-1" onClick={() => router.push(`/merchants/${transaction.merchant_id}`)}>
+                        <Button variant="outline" className="h-auto py-3 flex flex-col items-center gap-1" onClick={() => router.push('/merchant/profile')}>
                             <Store className="h-5 w-5 text-slate-500" />
-                            <span className="text-xs">Ver Comerciante</span>
+                            <span className="text-xs">Meu Perfil</span>
                         </Button>
-                        <Button variant="outline" className="h-auto py-3 flex flex-col items-center gap-1">
+                        <Button variant="outline" className="h-auto py-3 flex flex-col items-center gap-1" onClick={() => router.push('/merchant/receipts')}>
                             <History className="h-5 w-5 text-slate-500" />
                             <span className="text-xs">Histórico</span>
                         </Button>

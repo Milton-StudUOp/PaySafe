@@ -25,11 +25,29 @@ import { Loader2, Plus } from "lucide-react"
 import api from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import { Market } from "@/types"
+import { MOZAMBIQUE_LOCATIONS } from "../features/merchants/locations"
 
 interface CreateMerchantDialogProps {
     children?: React.ReactNode
     onSuccess?: () => void
 }
+
+const BUSINESS_TYPES = [
+    "Agricultura e Agro-negócio",
+    "Comércio",
+    "Indústria e Transformação",
+    "Prestação de Serviços",
+    "Transportes e Logística",
+    "Construção Civil e Imobiliário",
+    "Tecnologia da Informação e Comunicação",
+    "Educação e Formação",
+    "Saúde e Bem-estar",
+    "Hotelaria, Turismo e Restauração",
+    "Energia e Recursos Naturais",
+    "Serviços Financeiros e Empresariais",
+    "Arte, Cultura e Indústrias Criativas",
+    "Outros Negócios Emergentes"
+]
 
 export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDialogProps) {
     const [open, setOpen] = useState(false)
@@ -37,7 +55,7 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
     const { toast } = useToast()
 
     const [fullName, setFullName] = useState("")
-    const [merchantType, setMerchantType] = useState<"FIXO" | "AMBULANTE">("FIXO")
+    const [merchantType, setMerchantType] = useState<"FIXO" | "AMBULANTE" | "CIDADAO">("FIXO")
     const [businessType, setBusinessType] = useState("")
     const [businessName, setBusinessName] = useState("")  // Nome Comercial
     const [phoneNumber, setPhoneNumber] = useState("")
@@ -45,6 +63,11 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
     const [nfcUid, setNfcUid] = useState("")
     const [selectedMarket, setSelectedMarket] = useState<string>("")
     const [markets, setMarkets] = useState<Market[]>([])
+
+    // Cidadão Location
+    const [province, setProvince] = useState<string>("")
+    const [district, setDistrict] = useState<string>("")
+    const [districtOptions, setDistrictOptions] = useState<{ id: string, name: string }[]>([])
 
     // Mobile Money
     const [mobileOperator, setMobileOperator] = useState("")
@@ -56,6 +79,9 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
     const [idDocType, setIdDocType] = useState("")
     const [idDocNumber, setIdDocNumber] = useState("")
     const [idDocExpiry, setIdDocExpiry] = useState("")
+
+    const [showBusinessSuggestions, setShowBusinessSuggestions] = useState(false)
+    const [filteredBusinessTypes, setFilteredBusinessTypes] = useState(BUSINESS_TYPES)
 
     // Observation (required)
     const [requesterNotes, setRequesterNotes] = useState("")
@@ -93,12 +119,15 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
         setIdDocNumber("")
         setIdDocExpiry("")
         setRequesterNotes("")
+        setProvince("")
+        setDistrict("")
+        setDistrictOptions([])
     }
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
 
-        if (!selectedMarket) {
+        if (merchantType !== "CIDADAO" && !selectedMarket) {
             toast({
                 title: "Erro",
                 description: "Por favor, selecione um mercado.",
@@ -107,8 +136,8 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
             return
         }
 
-        // KYC Validation for FIXO merchants
-        if (merchantType === "FIXO") {
+        // KYC Validation for FIXO and CIDADAO merchants
+        if (merchantType === "FIXO" || merchantType === "CIDADAO") {
             const missingFields: string[] = []
             if (!nfcUid) missingFields.push("NFC UID")
             if (!phoneNumber) missingFields.push("Telefone")
@@ -119,7 +148,22 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
 
             if (missingFields.length > 0) {
                 toast({
-                    title: "Campos Obrigatórios (Comerciante FIXO)",
+                    title: "Campos Obrigatórios",
+                    description: `Preencha: ${missingFields.join(", ")}`,
+                    variant: "destructive"
+                })
+                return
+            }
+        }
+
+        if (merchantType === "CIDADAO") {
+            const missingFields: string[] = []
+            if (!province) missingFields.push("Província")
+            if (!district) missingFields.push("Distrito/Município")
+
+            if (missingFields.length > 0) {
+                toast({
+                    title: "Campos Obrigatórios",
                     description: `Preencha: ${missingFields.join(", ")}`,
                     variant: "destructive"
                 })
@@ -146,7 +190,9 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
                 merchant_type: merchantType,
                 business_type: businessType,
                 business_name: businessName || null,
-                market_id: parseInt(selectedMarket),
+                market_id: selectedMarket ? parseInt(selectedMarket) : null,
+                province: province || null,
+                district: district || null,
                 status: "ATIVO",
                 phone_number: phoneNumber || null,
                 password: password || null,
@@ -232,20 +278,56 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
                                 <SelectContent>
                                     <SelectItem value="FIXO">Fixo</SelectItem>
                                     <SelectItem value="AMBULANTE">Ambulante</SelectItem>
+                                    <SelectItem value="CIDADAO">Cidadão</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        <div className="grid grid-cols-4 items-center gap-4">
+                        <div className="grid grid-cols-4 items-center gap-4 relative">
                             <Label htmlFor="businessType" className="text-right">Negócio *</Label>
-                            <Input
-                                id="businessType"
-                                value={businessType}
-                                onChange={(e) => setBusinessType(e.target.value)}
-                                className="col-span-3"
-                                required
-                                placeholder="Ex: Restaurante, Loja de Roupa"
-                            />
+                            <div className="col-span-3 relative">
+                                <Input
+                                    id="businessType"
+                                    value={businessType}
+                                    onChange={(e) => {
+                                        const val = e.target.value
+                                        setBusinessType(val)
+                                        setFilteredBusinessTypes(
+                                            BUSINESS_TYPES.filter(t => t.toLowerCase().includes(val.toLowerCase()))
+                                        )
+                                        setShowBusinessSuggestions(true)
+                                    }}
+                                    onFocus={() => setShowBusinessSuggestions(true)}
+                                    // Delay hiding to allow click
+                                    onBlur={() => setTimeout(() => setShowBusinessSuggestions(false), 200)}
+                                    className="w-full"
+                                    required
+                                    placeholder="Ex: Restaurante, Loja de Roupa"
+                                    autoComplete="off"
+                                />
+                                {showBusinessSuggestions && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                        {filteredBusinessTypes.length > 0 ? (
+                                            filteredBusinessTypes.map((type) => (
+                                                <div
+                                                    key={type}
+                                                    className="px-3 py-2 cursor-pointer hover:bg-slate-100 text-sm"
+                                                    onClick={() => {
+                                                        setBusinessType(type)
+                                                        setShowBusinessSuggestions(false)
+                                                    }}
+                                                >
+                                                    {type}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-3 py-2 text-sm text-slate-500 italic">
+                                                Nenhuma sugestão
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-4 items-center gap-4">
@@ -259,24 +341,68 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
                             />
                         </div>
 
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="market" className="text-right">Mercado *</Label>
-                            <Select value={selectedMarket} onValueChange={setSelectedMarket}>
-                                <SelectTrigger className="col-span-3">
-                                    <SelectValue placeholder="Selecionar mercado" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {markets.map(m => (
-                                        <SelectItem key={m.id} value={m.id.toString()}>
-                                            {m.name} ({m.province})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {merchantType === "CIDADAO" ? (
+                            <>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="province" className="text-right">Província *</Label>
+                                    <Select
+                                        value={province}
+                                        onValueChange={(val) => {
+                                            setProvince(val)
+                                            setDistrict("") // Reset district
+                                            const selectedProv = MOZAMBIQUE_LOCATIONS.find(p => p.id === val)
+                                            setDistrictOptions(selectedProv ? selectedProv.districts : [])
+                                        }}
+                                    >
+                                        <SelectTrigger className="col-span-3">
+                                            <SelectValue placeholder="Selecione a província" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {MOZAMBIQUE_LOCATIONS.map(p => (
+                                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                        {/* KYC Fields - Only show for FIXO merchants */}
-                        {merchantType === "FIXO" && (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="district" className="text-right">Distrito *</Label>
+                                    <Select
+                                        value={district}
+                                        onValueChange={setDistrict}
+                                        disabled={!province}
+                                    >
+                                        <SelectTrigger className="col-span-3">
+                                            <SelectValue placeholder="Selecione o distrito" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {districtOptions.map(d => (
+                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="market" className="text-right">Mercado *</Label>
+                                <Select value={selectedMarket} onValueChange={setSelectedMarket}>
+                                    <SelectTrigger className="col-span-3">
+                                        <SelectValue placeholder="Selecionar mercado" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {markets.map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()}>
+                                                {m.name} ({m.province})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {/* KYC Fields - Show for FIXO and CIDADAO merchants */}
+                        {(merchantType === "FIXO" || merchantType === "CIDADAO") && (
                             <>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="phone" className="text-right">
@@ -421,8 +547,8 @@ export function CreateMerchantDialog({ children, onSuccess }: CreateMerchantDial
                             Criar
                         </Button>
                     </DialogFooter>
-                </form>
-            </DialogContent>
+                </form >
+            </DialogContent >
         </Dialog >
     )
 }

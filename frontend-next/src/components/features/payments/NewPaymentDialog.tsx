@@ -35,12 +35,20 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Loader2, Plus, DollarSign, Check, ChevronsUpDown, Smartphone, ScanLine, Tag, AlertCircle } from "lucide-react"
 import api from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import { Merchant } from "@/types"
+import { TaxConfiguration } from "@/types/tax"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -54,7 +62,8 @@ const baseSchema = z.object({
     observation: z.string().min(3, "Observação obrigatória"),
     payment_method: z.enum(["MPESA", "EMOLA", "MKESH", "DINHEIRO"]),
     nfc_uid: z.string().optional(),
-    mpesa_number: z.string().optional() // Must be in base schema to be passed to superRefine
+    mpesa_number: z.string().optional(), // Must be in base schema to be passed to superRefine
+    tax_code: z.string().min(1, "Selecione o tipo de receita/taxa")
 })
 
 // Refine schema based on method requirements
@@ -87,10 +96,15 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
     const [open, setOpen] = useState(false)
     const { toast } = useToast()
     const router = useRouter()
+
     const [merchants, setMerchants] = useState<Merchant[]>([])
     const [loadingMerchants, setLoadingMerchants] = useState(false)
     const [merchantOpen, setMerchantOpen] = useState(false)
     const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
+
+    // Taxes
+    const [taxes, setTaxes] = useState<TaxConfiguration[]>([])
+    const [selectedTax, setSelectedTax] = useState<TaxConfiguration | null>(null)
 
     const form = useForm<z.infer<typeof baseSchema> & { mpesa_number?: string }>({
         resolver: zodResolver(paymentSchema),
@@ -101,28 +115,33 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
             mpesa_number: "",
             observation: "",
             payment_method: "MPESA",
-            nfc_uid: ""
+            nfc_uid: "",
+            tax_code: "" // Default empty (General Payment)
         }
     })
 
     const watchMethod = form.watch("payment_method")
 
-    // Fetch Merchants
+    // Fetch Lists (Merchants & Taxes)
     useEffect(() => {
         if (open) {
-            const fetchMerchants = async () => {
+            const fetchData = async () => {
                 setLoadingMerchants(true)
                 try {
-                    const res = await api.get("/merchants/")
-                    setMerchants(res.data)
+                    const [merchantsRes, taxesRes] = await Promise.all([
+                        api.get("/merchants/"),
+                        api.get("/taxes/")
+                    ])
+                    setMerchants(merchantsRes.data)
+                    setTaxes(taxesRes.data)
                 } catch (error) {
-                    console.error("Error fetching merchants", error)
-                    toast({ title: "Erro", description: "Falha ao carregar comerciantes", variant: "destructive" })
+                    console.error("Error fetching data", error)
+                    toast({ title: "Erro", description: "Falha ao carregar dados iniciais", variant: "destructive" })
                 } finally {
                     setLoadingMerchants(false)
                 }
             }
-            fetchMerchants()
+            fetchData()
         }
     }, [open, toast])
 
@@ -131,7 +150,7 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
         if (selectedMerchant) {
             const m = selectedMerchant as any
             if (watchMethod === "MPESA") form.setValue("mpesa_number", m.mpesa_number || "")
-            else if (watchMethod === "EMOLA") form.setValue("mpesa_number", m.emola_number || "") // Field name is mpesa_number but we'll use it as generic "customer number" for payload
+            else if (watchMethod === "EMOLA") form.setValue("mpesa_number", m.emola_number || "")
             else if (watchMethod === "MKESH") form.setValue("mpesa_number", m.mkesh_number || "")
             else if (watchMethod === "DINHEIRO") form.setValue("mpesa_number", "") // Clear for cash
         }
@@ -143,8 +162,6 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
         if (!watchNfc || watchNfc.length < 3) return // Avoid too short triggers
 
         // Find merchant with this NFC
-        // Note: Using 'any' cast because interface might be missing nfc_uid if not updated in frontend type, 
-        // but backend returns it.
         const match = merchants.find((m: any) => m.nfc_uid === watchNfc)
 
         if (match && (!selectedMerchant || selectedMerchant.id !== match.id)) {
@@ -152,7 +169,7 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
             toast({
                 title: "Comerciante Encontrado",
                 description: `NFC associado a ${match.full_name}`,
-                variant: 'default', // standard blue/info
+                variant: 'default',
             })
         }
     }, [watchNfc, merchants, selectedMerchant])
@@ -165,8 +182,6 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
 
         const m = merchant as any
         // Auto-fill NFC
-        // IMPORTANT: Always set or clear to avoid conflicting with the Reverse Lookup Effect
-        // If we leave the old NFC here, the Effect will see it and switch back to the old merchant!
         form.setValue("nfc_uid", m.nfc_uid || "")
 
         // Check availability and default method
@@ -174,34 +189,39 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
         if (m.mpesa_number) methods.push("MPESA")
         if (m.emola_number) methods.push("EMOLA")
         if (m.mkesh_number) methods.push("MKESH")
-        methods.push("DINHEIRO") // Always available
+        methods.push("DINHEIRO")
 
         // If current method is not available for this merchant (and not Cash), switch
         if (watchMethod !== "DINHEIRO" && !methods.includes(watchMethod)) {
             // Default to MPESA if available, else Cash
             if (methods.includes("MPESA")) form.setValue("payment_method", "MPESA")
             else form.setValue("payment_method", "DINHEIRO")
+        }
+    }
+
+    // Handle Tax Selection
+    const handleSelectTax = (code: string) => {
+        if (!code || code === "GENERAL") {
+            setSelectedTax(null)
+            form.setValue("observation", "")
+            return
+        }
+
+        const tax = taxes.find(t => t.code === code)
+        setSelectedTax(tax || null)
+
+        if (tax?.is_fixed_amount && tax.default_amount) {
+            form.setValue("amount", tax.default_amount.toString())
+            form.setValue("observation", `Pagamento de ${tax.name}`)
         } else {
-            // If we stay on same method, trigger fill via Effect (or do it here explicitly)
-            // The effect [watchMethod, selectedMerchant] will handle it
+            if (tax) form.setValue("observation", `Pagamento de ${tax.name}`)
         }
     }
 
     // Determine available methods for UI
     const getAvailableMethods = () => {
-        // Cash always available
-        const list = ["DINHEIRO"]
-
-        if (selectedMerchant) {
-            const m = selectedMerchant as any
-            if (m.mpesa_number) list.push("MPESA")
-            if (m.emola_number) list.push("EMOLA")
-            if (m.mkesh_number) list.push("MKESH")
-        } else {
-            // If no merchant selected, maybe show all?
-            list.push("MPESA", "EMOLA", "MKESH")
-        }
-        return list
+        // All methods always available - user can enter any number manually
+        return ["DINHEIRO", "MPESA", "EMOLA", "MKESH"]
     }
 
     const availableMethods = getAvailableMethods()
@@ -222,10 +242,11 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
                 merchant_id: parseInt(values.merchant_id),
                 pos_id: values.pos_id ? parseInt(values.pos_id) : null,
                 amount: parseFloat(values.amount),
-                mpesa_number: values.payment_method === "DINHEIRO" ? "820000000" : values.mpesa_number, // Dummy number for cash if backend requires validation, but our backend model just saves payload. Let's send dummy or empty if allowed.
+                mpesa_number: values.payment_method === "DINHEIRO" ? "820000000" : values.mpesa_number,
                 observation: values.observation,
                 payment_method: values.payment_method,
-                nfc_uid: values.nfc_uid || null
+                nfc_uid: values.nfc_uid || null,
+                tax_code: values.tax_code // Send tax_code from database
             })
 
             const transaction = res.data
@@ -257,22 +278,23 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
             form.reset()
             setOpen(false)
             setSelectedMerchant(null)
-            if (onSuccess) onSuccess() // Refresh data regardless of outcome
+            setSelectedTax(null)
+            if (onSuccess) onSuccess()
         }
     }
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
-                    <Plus className="mr-2 h-4 w-4" /> Novo Pagamento
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-semibold">
+                    <Plus className="mr-2 h-4 w-4" /> Nova Cobrança
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] bg-white">
                 <DialogHeader>
-                    <DialogTitle>Novo Pagamento Web</DialogTitle>
+                    <DialogTitle>Nova Cobrança Web</DialogTitle>
                     <DialogDescription>
-                        Envie uma solicitação de pagamento para o cliente.
+                        Envie uma solicitação de pagamento ou registre um pagamento em espécie.
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
@@ -341,6 +363,40 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
                             )}
                         />
 
+                        {/* TAX TYPE */}
+                        {selectedMerchant && (
+                            <FormField
+                                control={form.control}
+                                name="tax_code"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Tipo de Receita / Taxa *</FormLabel>
+                                        <Select
+                                            onValueChange={(val) => {
+                                                field.onChange(val)
+                                                handleSelectTax(val)
+                                            }}
+                                            defaultValue={field.value}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione o tipo..." />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {taxes.map((tax) => (
+                                                    <SelectItem key={tax.code} value={tax.code}>
+                                                        {tax.name} {tax.is_fixed_amount && `(${tax.default_amount} MT)`}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+
                         {/* NFC & AMOUNT ROW */}
                         <div className="grid grid-cols-2 gap-4">
                             {/* NFC (Optional) */}
@@ -349,7 +405,7 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
                                 name="nfc_uid"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>NFC UID (Opcional)</FormLabel>
+                                        <FormLabel>NFC (Opcional)</FormLabel>
                                         <FormControl>
                                             <div className="relative">
                                                 <ScanLine className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
@@ -371,7 +427,14 @@ export function NewPaymentDialog({ onSuccess }: NewPaymentDialogProps) {
                                         <FormControl>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-2.5 top-2.5 h-4 w-4 text-emerald-600" />
-                                                <Input type="number" step="0.01" {...field} className="pl-9 font-bold text-emerald-700" placeholder="0.00" />
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    {...field}
+                                                    className={cn("pl-9 font-bold text-emerald-700", selectedTax?.is_fixed_amount && "bg-slate-100")}
+                                                    placeholder="0.00"
+                                                    disabled={selectedTax?.is_fixed_amount}
+                                                />
                                             </div>
                                         </FormControl>
                                         <FormMessage />

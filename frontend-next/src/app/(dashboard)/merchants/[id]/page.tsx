@@ -197,9 +197,18 @@ export default function MerchantDetailPage() {
                                 <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Dados Comerciais</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <InfoRow icon={<MapPin />} label="Mercado" value={merchant.market_name || `Mercado ID ${merchant.market_id}`} />
-                                <InfoRow icon={<MapPin />} label="Província" value={merchant.market_province || "-"} />
-                                <InfoRow icon={<MapPin />} label="Distrito" value={merchant.market_district || "-"} />
+                                {merchant.merchant_type === 'CIDADAO' ? (
+                                    <>
+                                        <InfoRow icon={<MapPin />} label="Província" value={merchant.province || "-"} />
+                                        <InfoRow icon={<MapPin />} label="Distrito/Município" value={merchant.district || "-"} />
+                                    </>
+                                ) : (
+                                    <>
+                                        <InfoRow icon={<MapPin />} label="Mercado" value={merchant.market_name || (merchant.market_id ? `Mercado ID ${merchant.market_id}` : "-")} />
+                                        <InfoRow icon={<MapPin />} label="Província" value={merchant.market_province || "-"} />
+                                        <InfoRow icon={<MapPin />} label="Distrito" value={merchant.market_district || "-"} />
+                                    </>
+                                )}
                                 <InfoRow icon={<CreditCard />} label="Ramo de Negócio" value={merchant.business_type || "-"} />
                                 <InfoRow icon={<FileText />} label="Nome Comercial" value={merchant.business_name || "-"} />
                                 <InfoRow icon={<Shield />} label="NFC UID" value={merchant.nfc_uid || "Não vinculado"} />

@@ -110,7 +110,7 @@ const ReceiptTemplate = ({ tx, isPrintCopy = false }: { tx: Transaction, isPrint
                 <div className="space-y-4 relative z-10 my-6">
                     {/* Merchant Info */}
                     <div className="space-y-1">
-                        <p className="text-[10px] uppercase text-slate-400 font-bold">Comerciante</p>
+                        <p className="text-[10px] uppercase text-slate-400 font-bold">Usuário</p>
                         <div className="flex justify-between items-baseline border-b border-dashed border-slate-200 pb-1">
                             <span className="font-bold">{tx.merchant?.full_name}</span>
                         </div>

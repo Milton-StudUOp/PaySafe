@@ -6,6 +6,7 @@ from enum import Enum
 class MerchantType(str, Enum):
     FIXO = "FIXO"
     AMBULANTE = "AMBULANTE"
+    CIDADAO = "CIDADAO"
 
 class IdDocumentType(str, Enum):
     BI = "BI"
@@ -38,7 +39,9 @@ class MerchantBase(BaseModel):
     mobile_operator: Optional[MobileOperator] = None
     business_type: str
     business_name: Optional[str] = None  # Nome Comercial
-    market_id: int
+    market_id: Optional[int] = None
+    province: Optional[str] = None
+    district: Optional[str] = None
     mpesa_number: Optional[str] = None
     emola_number: Optional[str] = None
     mkesh_number: Optional[str] = None
@@ -60,6 +63,8 @@ class MerchantUpdate(BaseModel):
     business_type: Optional[str] = None
     business_name: Optional[str] = None  # Nome Comercial
     market_id: Optional[int] = None
+    province: Optional[str] = None  # For Cidadão merchants
+    district: Optional[str] = None  # For Cidadão merchants
     mpesa_number: Optional[str] = None
     emola_number: Optional[str] = None
     mkesh_number: Optional[str] = None

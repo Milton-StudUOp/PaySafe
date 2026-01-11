@@ -17,7 +17,8 @@ import {
     MapPin,
     Wallet,
     User,
-    LogOut
+    LogOut,
+    Coins
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
@@ -144,6 +145,12 @@ export function Sidebar() {
         {
             label: "Administração",
             header: true,
+            roles: ["ADMIN"]
+        },
+        {
+            label: "Taxas e Impostos",
+            href: "/admin/taxes",
+            icon: Coins,
             roles: ["ADMIN"]
         },
         {

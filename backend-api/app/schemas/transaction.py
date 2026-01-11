@@ -31,6 +31,8 @@ class TransactionBase(BaseModel):
     status: TransactionStatus = TransactionStatus.PENDING
     province: Optional[str] = None
     district: Optional[str] = None
+    tax_code: Optional[str] = None
+    tax_year: Optional[int] = None
 
 class TransactionCreate(TransactionBase):
     # Optional: Client-provided UUID for offline transactions
@@ -67,6 +69,9 @@ class Transaction(TransactionBase):
     merchant: Optional[Merchant] = None
     agent: Optional[Agent] = None
     funcionario: Optional[User] = None
+    
+    # Enriched fields (not in DB, populated at runtime)
+    tax_name: Optional[str] = None
 
     @field_validator('status', mode='before', check_fields=False)
     @classmethod

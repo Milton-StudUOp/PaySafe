@@ -6,6 +6,7 @@ import enum
 class MerchantType(str, enum.Enum):
     FIXO = "FIXO"
     AMBULANTE = "AMBULANTE"
+    CIDADAO = "CIDADAO"
 
 class IdDocumentType(str, enum.Enum):
     BI = "BI"
@@ -54,7 +55,11 @@ class Merchant(Base):
     # Negócio
     business_type = Column(String(100), nullable=False)
     business_name = Column(String(200), nullable=True)  # Nome Comercial
-    market_id = Column(BigInteger, ForeignKey("markets.id"), nullable=False)
+    market_id = Column(BigInteger, ForeignKey("markets.id"), nullable=True) # Nullable for CIDADAO
+    
+    # Localização (Para Cidadão sem Mercado)
+    province = Column(String(100), nullable=True)
+    district = Column(String(100), nullable=True)
     
     # Pagamentos móveis
     mpesa_number = Column(String(20), nullable=True)

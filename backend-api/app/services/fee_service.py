@@ -16,6 +16,10 @@ async def validate_merchant_payment_status(merchant: Merchant, db: AsyncSession)
     
     today = date.today()
     
+    # Exemption for CIDADAO
+    if merchant.merchant_type == "CIDADAO":
+        return merchant
+    
     # 1. Determine effective billing start date
     reg_date = merchant.registered_at.date() if merchant.registered_at else today
     

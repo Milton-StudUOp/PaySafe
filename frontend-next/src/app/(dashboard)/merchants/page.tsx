@@ -170,7 +170,7 @@ export default function MerchantsPage() {
     const handleExportCSV = () => {
         if (!filteredMerchants || filteredMerchants.length === 0) return;
 
-        const headers = ["ID", "Nome", "Nome Comercial", "Tipo", "Mercado", "Telefone", "UID/Doc", "Status"];
+        const headers = ["ID", "Nome", "Nome Comercial", "Tipo", "Localização", "Telefone", "UID/Doc", "Status"];
         const csvContent = [
             headers.join(","),
             ...filteredMerchants.map((row: Merchant) => {
@@ -180,7 +180,7 @@ export default function MerchantsPage() {
                     `"${row.full_name}"`,
                     `"${row.business_name || ''}"`,
                     `"${row.merchant_type}"`,
-                    `"${marketName}"`,
+                    `"${row.market_id ? marketName : (row.district ? `${row.district}, ${row.province}` : "-")}"`,
                     `"${row.phone_number || ''}"`,
                     `"${row.nfc_uid || row.id_document_number || ''}"`,
                     `"${row.status}"`
@@ -223,6 +223,7 @@ export default function MerchantsPage() {
                                 <TabsTrigger value="ALL">Todos</TabsTrigger>
                                 <TabsTrigger value="FIXO">Fixos</TabsTrigger>
                                 <TabsTrigger value="AMBULANTE">Ambulantes</TabsTrigger>
+                                <TabsTrigger value="CIDADAO">Cidadãos</TabsTrigger>
                             </TabsList>
 
                             <div className="flex items-center gap-2">
@@ -284,7 +285,7 @@ export default function MerchantsPage() {
                                 value={marketFilter}
                                 onChange={(e) => setMarketFilter(e.target.value)}
                             >
-                                <option value="ALL">Todas Mercados</option>
+                                <option value="ALL">Todos Locais</option>
                                 {markets.map(m => (
                                     <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
@@ -341,52 +342,68 @@ export default function MerchantsPage() {
                             <Table>
                                 <TableHeader className="bg-slate-50">
                                     <TableRow>
-                                        <TableHead className="w-[80px]">ID</TableHead>
-                                        <TableHead>Comerciante</TableHead>
-                                        <TableHead>Nome Comercial</TableHead>
-                                        <TableHead>Tipo</TableHead>
-                                        <TableHead>Mercado</TableHead>
-                                        <TableHead>Contato</TableHead>
-                                        <TableHead>UID / Doc</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Pagamento</TableHead>
+                                        <TableHead className="w-[80px] text-center">ID</TableHead>
+                                        <TableHead className="text-center">Comerciante</TableHead>
+                                        <TableHead className="text-center">Nome Comercial</TableHead>
+                                        <TableHead className="text-center">Tipo</TableHead>
+                                        <TableHead className="text-center">Localização</TableHead>
+                                        <TableHead className="text-center">Contato</TableHead>
+                                        <TableHead className="text-center">UID / Doc</TableHead>
+                                        <TableHead className="text-center">Status</TableHead>
+                                        <TableHead className="text-center">Pagamento</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredMerchants.map((merchant: Merchant) => (
                                         <TableRow key={merchant.id} className="hover:bg-slate-50/50">
-                                            <TableCell className="font-mono text-xs text-slate-500">#{merchant.id}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="text-center font-mono text-xs text-slate-500">#{merchant.id}</TableCell>
+                                            <TableCell className="text-left md:pl-8">
                                                 <div className="flex flex-col">
                                                     <span className="font-medium text-slate-900">{merchant.full_name}</span>
                                                     <span className="text-xs text-slate-500">{merchant.business_type || "Não informado"}</span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-sm text-slate-600">
+                                            <TableCell className="text-center text-sm text-slate-600">
                                                 {merchant.business_name || "-"}
                                             </TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className={merchant.merchant_type === 'FIXO' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'}>
+                                            <TableCell className="text-center">
+                                                <Badge variant="outline" className={
+                                                    merchant.merchant_type === 'FIXO'
+                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                        : merchant.merchant_type === 'AMBULANTE'
+                                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                }>
                                                     {merchant.merchant_type}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-sm text-slate-600">
-                                                {markets.find(m => m.id === merchant.market_id)?.name || merchant.market_id || "N/A"}
+                                            <TableCell className="text-center text-sm text-slate-600">
+                                                {merchant.merchant_type === 'CIDADAO'
+                                                    ? "-"
+                                                    : (merchant.market_id
+                                                        ? (markets.find(m => m.id === merchant.market_id)?.name || merchant.market_id)
+                                                        : "-")
+                                                }
+                                                {merchant.merchant_type === 'CIDADAO' && merchant.district && (
+                                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                                        {merchant.district}
+                                                    </div>
+                                                )}
                                             </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-col text-sm">
+                                            <TableCell className="text-center">
+                                                <div className="flex flex-col text-sm items-center">
                                                     <span>{merchant.phone_number || "-"}</span>
                                                     {merchant.mobile_operator && (
                                                         <span className="text-[10px] uppercase font-bold text-slate-400">{merchant.mobile_operator}</span>
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs text-slate-500">
+                                            <TableCell className="text-center font-mono text-xs text-slate-500">
                                                 {merchant.nfc_uid || merchant.id_document_number || "-"}
                                             </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-col gap-1 items-start">
+                                            <TableCell className="text-center">
+                                                <div className="flex flex-col gap-1 items-center">
                                                     <Badge variant={getStatusColor(merchant.status)}>
                                                         {merchant.status}
                                                     </Badge>
@@ -395,9 +412,11 @@ export default function MerchantsPage() {
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
-                                                {merchant.payment_status === "IRREGULAR" ? (
-                                                    <div className="flex flex-col items-start">
+                                            <TableCell className="text-center">
+                                                {merchant.merchant_type === 'CIDADAO' ? (
+                                                    <span className="text-slate-400">-</span>
+                                                ) : merchant.payment_status === "IRREGULAR" ? (
+                                                    <div className="flex flex-col items-center">
                                                         <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200">
                                                             Irregular
                                                         </Badge>
@@ -409,7 +428,7 @@ export default function MerchantsPage() {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex flex-col items-start">
+                                                    <div className="flex flex-col items-center">
                                                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                                             Regular
                                                         </Badge>
@@ -442,7 +461,7 @@ export default function MerchantsPage() {
                                                         {user?.role === "ADMIN" && (
                                                             <DropdownMenuItem onClick={() => openDateDialog(merchant)}>
                                                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                <span>Alterar Início Cobrança</span>
+                                                                <span>Renovar Início de Atividade</span>
                                                             </DropdownMenuItem>
                                                         )}
                                                     </DropdownMenuContent>
@@ -472,9 +491,9 @@ export default function MerchantsPage() {
             <Dialog open={!!editingDateMerchant} onOpenChange={(open) => !open && setEditingDateMerchant(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Alterar Início de Cobrança</DialogTitle>
+                        <DialogTitle>Renovar Início de Atividade</DialogTitle>
                         <DialogDescription>
-                            Defina a data a partir da qual as taxas diárias (10 MT) começam a ser calculadas para <b>{editingDateMerchant?.full_name}</b>.
+                            Defina a data a partir da qual as taxas começam a ser calculadas para <b>{editingDateMerchant?.full_name}</b>.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.routers.auth import get_current_user
 from app.models.user import User as UserSchema
 from app.models import Market as MarketModel
+from app.models.tax_config import TaxConfiguration
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -33,6 +34,7 @@ async def list_transactions(
     end_date: Optional[date] = None,
     province: Optional[str] = None,
     district: Optional[str] = None,
+    tax_code: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserSchema = Depends(get_current_user) # Using UserSchema or plain dict? get_current_user returns User model.
 ):
@@ -46,13 +48,13 @@ async def list_transactions(
         selectinload(TransactionModel.agent).selectinload(Agent.pos_devices),
         selectinload(TransactionModel.funcionario),
         selectinload(TransactionModel.pos_device)
-    ).join(Merchant, TransactionModel.merchant_id == Merchant.id).join(MarketModel, Merchant.market_id == MarketModel.id)
+    ).join(Merchant, TransactionModel.merchant_id == Merchant.id).outerjoin(MarketModel, Merchant.market_id == MarketModel.id)
     
-    # 1. Explicit Filters
+    # 1. Explicit Filters (check both market and merchant location for Cidadão)
     if province:
-        query = query.where(MarketModel.province == province)
+        query = query.where(or_(MarketModel.province == province, Merchant.province == province))
     if district:
-        query = query.where(MarketModel.district.ilike(f"%{district}%"))
+        query = query.where(or_(MarketModel.district.ilike(f"%{district}%"), Merchant.district.ilike(f"%{district}%")))
 
     # RBAC Location Scoping
     # Check user role by role.value instead of duck typing
@@ -72,11 +74,21 @@ async def list_transactions(
         
     elif user_role == "SUPERVISOR":
         if hasattr(current_user, 'scope_district') and current_user.scope_district:
-            query = query.where(MarketModel.district == current_user.scope_district)
+            query = query.where(
+                or_(
+                    MarketModel.district == current_user.scope_district,
+                    Merchant.district == current_user.scope_district
+                )
+            )
                 
     elif user_role == "FUNCIONARIO":
         if hasattr(current_user, 'scope_province') and current_user.scope_province:
-            query = query.where(MarketModel.province == current_user.scope_province)
+            query = query.where(
+                or_(
+                    MarketModel.province == current_user.scope_province,
+                    Merchant.province == current_user.scope_province
+                )
+            )
 
 
     filters = []
@@ -104,6 +116,9 @@ async def list_transactions(
         
     if end_date:
         filters.append(func.date(TransactionModel.created_at) <= end_date)
+    
+    if tax_code:
+        filters.append(TransactionModel.tax_code == tax_code)
         
     if search:
         filters.append(or_(
@@ -126,6 +141,18 @@ async def list_transactions(
             tx.merchant.market_name = tx.merchant.market.name
             tx.merchant.market_province = tx.merchant.market.province
             tx.merchant.market_district = tx.merchant.market.district
+    
+    # Collect unique tax_codes to fetch names in batch
+    tax_codes = set(tx.tax_code for tx in transactions if tx.tax_code)
+    if tax_codes:
+        tax_result = await db.execute(
+            select(TaxConfiguration.code, TaxConfiguration.name)
+            .where(TaxConfiguration.code.in_(tax_codes))
+        )
+        tax_map = {row.code: row.name for row in tax_result.all()}
+        for tx in transactions:
+            if tx.tax_code and tx.tax_code in tax_map:
+                setattr(tx, 'tax_name', tax_map[tx.tax_code])
     
     return transactions
 
@@ -445,6 +472,15 @@ async def get_transaction_by_uuid(
         tx.merchant.market_name = tx.merchant.market.name
         tx.merchant.market_province = tx.merchant.market.province
         tx.merchant.market_district = tx.merchant.market.district
+    
+    # Enrich with tax_name from TaxConfiguration
+    if tx.tax_code:
+        tax_result = await db.execute(
+            select(TaxConfiguration.name).where(TaxConfiguration.code == tx.tax_code)
+        )
+        tax_name = tax_result.scalar_one_or_none()
+        if tax_name:
+            setattr(tx, 'tax_name', tax_name)
     
     logger.info(f"Found transaction ID {tx.id} for UUID: {transaction_uuid}")
     return tx

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { Search, Filter, X, Calendar as CalendarIcon, Download, RefreshCw, MapPin, Store, Users, Smartphone, CreditCard } from "lucide-react"
+import { Search, Filter, X, Calendar as CalendarIcon, Download, RefreshCw, MapPin, Store, Users, Smartphone, CreditCard, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -19,11 +19,13 @@ import { cn } from "@/lib/utils"
 interface Market { id: number; name: string; province?: string; district?: string }
 interface Agent { id: number; full_name: string; agent_code: string; assigned_market_id?: number; }
 interface POSDevice { id: number; serial_number: string; province?: string; assigned_agent_id?: number; }
+interface TaxOption { code: string; name: string }
 
 interface TransactionFiltersProps {
     markets: Market[]
     agents: Agent[]
     posDevices: POSDevice[]
+    taxes: TaxOption[]
     provinces: { id: number; name: string }[]
     municipalities: { id: number; name: string }[]
 
@@ -51,6 +53,9 @@ interface TransactionFiltersProps {
     methodFilter: string
     setMethodFilter: (v: string) => void
 
+    taxCodeFilter: string
+    setTaxCodeFilter: (v: string) => void
+
     startDate: string
     setStartDate: (v: string) => void
 
@@ -68,7 +73,7 @@ interface TransactionFiltersProps {
 }
 
 export function TransactionFilters({
-    markets, agents, posDevices, provinces, municipalities,
+    markets, agents, posDevices, taxes, provinces, municipalities,
     searchTerm, setSearchTerm,
     provinceFilter, setProvinceFilter,
     districtFilter, setDistrictFilter,
@@ -77,6 +82,7 @@ export function TransactionFilters({
     posFilter, setPosFilter,
     statusFilter, setStatusFilter,
     methodFilter, setMethodFilter,
+    taxCodeFilter, setTaxCodeFilter,
     startDate, setStartDate,
     endDate, setEndDate,
     onRefresh, onExport, onClear,
@@ -155,6 +161,7 @@ export function TransactionFilters({
         posFilter !== "ALL",
         statusFilter !== "ALL",
         methodFilter !== "ALL",
+        taxCodeFilter !== "ALL",
         startDate !== "",
         endDate !== ""
     ].filter(Boolean).length
@@ -340,6 +347,22 @@ export function TransactionFilters({
                                 <SelectItem value="PENDENTE">⏳ Pendente</SelectItem>
                                 <SelectItem value="FALHOU">❌ Falhou</SelectItem>
                                 <SelectItem value="CANCELADO">🚫 Cancelado</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={taxCodeFilter} onValueChange={setTaxCodeFilter}>
+                            <SelectTrigger className={cn("bg-white border-slate-200",
+                                taxCodeFilter !== "ALL" && "text-blue-600 font-medium bg-blue-50 border-blue-200"
+                            )}>
+                                <SelectValue placeholder="Tipo de Receita" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">Todos os Tipos</SelectItem>
+                                {taxes.map((tax) => (
+                                    <SelectItem key={tax.code} value={tax.code}>
+                                        {tax.name}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>

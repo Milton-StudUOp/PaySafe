@@ -42,24 +42,30 @@ echo.
 
 echo Step 2: Running database migrations...
 echo -------------------------------------------
-if exist "migrations\001_add_payment_status_mysql.sql" (
-    if exist "%WAMP_MYSQL%" (
-        echo Found MySQL at: %WAMP_MYSQL%
+
+if exist "%WAMP_MYSQL%" (
+    echo Found MySQL at: %WAMP_MYSQL%
+    
+    REM Migration 001
+    if exist "migrations\001_add_payment_status_mysql.sql" (
         echo Running migration: 001_add_payment_status_mysql.sql
         "%WAMP_MYSQL%" -u%MYSQL_USER% -p%MYSQL_PASS% -h%MYSQL_HOST% %MYSQL_DB% < migrations\001_add_payment_status_mysql.sql 2>nul
-        if %ERRORLEVEL% NEQ 0 (
-            echo [WARN] Migration may already be applied or failed
-        ) else (
-            echo [OK] Migration applied successfully
-        )
-    ) else (
-        echo [WARN] MySQL not found at WampServer path
-        echo        Please run migration manually or add MySQL to PATH
-        echo        Expected: %WAMP_MYSQL%
+        if !ERRORLEVEL! EQU 0 echo [OK] 001 Applied
     )
+
+    REM Migration Tax Config (includes transactions columns)
+    if exist "migrations\create_tax_configurations.sql" (
+        echo Running migration: create_tax_configurations.sql
+        "%WAMP_MYSQL%" -u%MYSQL_USER% -p%MYSQL_PASS% -h%MYSQL_HOST% %MYSQL_DB% < migrations\create_tax_configurations.sql 2>nul
+        if !ERRORLEVEL! EQU 0 echo [OK] Tax Config Applied
+    )
+
 ) else (
-    echo No migration files found
+    echo [WARN] MySQL not found at WampServer path
+    echo        Please run migrations manually
+    echo        Expected: %WAMP_MYSQL%
 )
+
 echo.
 
 echo Step 3: Starting Uvicorn server...

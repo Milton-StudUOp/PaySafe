@@ -36,13 +36,14 @@ import api from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import { Merchant } from "@/types"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { MOZAMBIQUE_LOCATIONS, District } from "./locations"
 
 // Comprehensive Schema matching Backend
 const editSchema = z.object({
     full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
 
     // Type Switching
-    merchant_type: z.enum(["FIXO", "AMBULANTE"]),
+    merchant_type: z.enum(["FIXO", "AMBULANTE", "CIDADAO"]),
 
     phone_number: z.string().optional(),
 
@@ -50,6 +51,8 @@ const editSchema = z.object({
     business_type: z.string().optional(),
     business_name: z.string().optional(),  // Nome Comercial
     market_id: z.string().optional(),
+    province: z.string().optional(),
+    district: z.string().optional(),
     status: z.enum(["ATIVO", "SUSPENSO", "BLOQUEADO"]),
 
     // KYC
@@ -92,6 +95,38 @@ const editSchema = z.object({
             });
         }
     }
+
+    // CIDADAO Validation (Same as FIXO for KYC)
+    if (data.merchant_type === "CIDADAO") {
+        if (!data.phone_number || data.phone_number.length < 5) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Telefone é obrigatório para Cidadão",
+                path: ["phone_number"]
+            });
+        }
+        if (!data.id_document_number) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Nº Documento é obrigatório para Cidadão",
+                path: ["id_document_number"]
+            });
+        }
+        if (!data.province) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Província é obrigatória para Cidadão",
+                path: ["province"]
+            });
+        }
+        if (!data.district) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Distrito é obrigatório para Cidadão",
+                path: ["district"]
+            });
+        }
+    }
 });
 
 interface EditMerchantDialogProps {
@@ -99,9 +134,28 @@ interface EditMerchantDialogProps {
     onSuccess?: () => void
 }
 
+const BUSINESS_TYPES = [
+    "Agricultura e Agro-negócio",
+    "Comércio",
+    "Indústria e Transformação",
+    "Prestação de Serviços",
+    "Transportes e Logística",
+    "Construção Civil e Imobiliário",
+    "Tecnologia da Informação e Comunicação",
+    "Educação e Formação",
+    "Saúde e Bem-estar",
+    "Hotelaria, Turismo e Restauração",
+    "Energia e Recursos Naturais",
+    "Serviços Financeiros e Empresariais",
+    "Arte, Cultura e Indústrias Criativas",
+    "Outros Negócios Emergentes"
+]
+
 export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogProps) {
     const [open, setOpen] = useState(false)
     const [markets, setMarkets] = useState<any[]>([])
+    const [filteredBusinessTypes, setFilteredBusinessTypes] = useState<string[]>([])
+    const [districtOptions, setDistrictOptions] = useState<District[]>([])
     const { toast } = useToast()
 
     const form = useForm<z.infer<typeof editSchema>>({
@@ -113,6 +167,8 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
             business_type: merchant.business_type || "",
             business_name: merchant.business_name || "",  // Nome Comercial
             market_id: merchant.market_id?.toString() || "",
+            province: merchant.province || "",
+            district: merchant.district || "",
             status: merchant.status as any,
 
             // Map new API fields (handle nulls safely)
@@ -142,6 +198,8 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
                 business_type: merchant.business_type || "",
                 business_name: merchant.business_name || "",
                 market_id: merchant.market_id?.toString() || "",
+                province: merchant.province || "",
+                district: merchant.district || "",
                 status: merchant.status as any,
                 id_document_type: (merchant.id_document_type as any) || "BI",
                 id_document_number: merchant.id_document_number || "",
@@ -153,6 +211,15 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
                 nfc_uid: merchant.nfc_uid || "",
                 requester_notes: ""  // Always start empty for new observation
             })
+
+            // Set initial district options if we have a province
+            if (merchant.province) {
+                const selectedProv = MOZAMBIQUE_LOCATIONS.find(p => p.id === merchant.province)
+                setDistrictOptions(selectedProv ? selectedProv.districts : [])
+            } else {
+                setDistrictOptions([])
+            }
+
             fetchMarkets()
         }
     }, [open, merchant, form])
@@ -172,6 +239,8 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
             const payload = {
                 ...values,
                 market_id: values.market_id ? parseInt(values.market_id) : null,
+                province: values.province || null,
+                district: values.district || null,
                 id_document_expiry: values.id_document_expiry || null,
                 nfc_uid: values.nfc_uid || null,
                 mpesa_number: values.mpesa_number || null,
@@ -274,6 +343,7 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
                                             <SelectContent>
                                                 <SelectItem value="FIXO">Fixo</SelectItem>
                                                 <SelectItem value="AMBULANTE">Ambulante</SelectItem>
+                                                <SelectItem value="CIDADAO">Cidadão</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <FormMessage />
@@ -309,41 +379,133 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
 
                         {/* SECTION 2: BUSINESS */}
                         <div className="p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-100">
-                            <h3 className="text-xs font-semibold uppercase text-slate-500 tracking-wider mb-2">Dados Comerciais</h3>
+                            <h3 className="text-xs font-semibold uppercase text-slate-500 tracking-wider mb-2">Dados Comerciais / Localização</h3>
                             <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="market_id"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Mercado</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger className="bg-white text-slate-900">
-                                                        <SelectValue placeholder="Selecione um mercado" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {markets.map((market) => (
-                                                        <SelectItem key={market.id} value={market.id.toString()}>
-                                                            {market.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                                {watchMerchantType !== "CIDADAO" && (
+                                    <FormField
+                                        control={form.control}
+                                        name="market_id"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Mercado</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="bg-white text-slate-900">
+                                                            <SelectValue placeholder="Selecione um mercado" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {markets.map((market) => (
+                                                            <SelectItem key={market.id} value={market.id.toString()}>
+                                                                {market.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
+
+                                {watchMerchantType === "CIDADAO" && (
+                                    <>
+                                        <FormField
+                                            control={form.control}
+                                            name="province"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Província *</FormLabel>
+                                                    <Select
+                                                        onValueChange={(val) => {
+                                                            field.onChange(val)
+                                                            form.setValue("district", "") // Reset district
+                                                            const selectedProv = MOZAMBIQUE_LOCATIONS.find(p => p.id === val)
+                                                            setDistrictOptions(selectedProv ? selectedProv.districts : [])
+                                                        }}
+                                                        value={field.value}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger className="bg-white">
+                                                                <SelectValue placeholder="Selecione" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {MOZAMBIQUE_LOCATIONS.map(p => (
+                                                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="district"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Distrito/Município *</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value} disabled={!form.getValues("province")}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="bg-white">
+                                                                <SelectValue placeholder="Selecione" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {districtOptions.map(d => (
+                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </>
+                                )}
+
                                 <FormField
                                     control={form.control}
                                     name="business_type"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="relative">
                                             <FormLabel>Ramo de Negócio</FormLabel>
                                             <FormControl>
-                                                <Input {...field} className="bg-white" />
+                                                <Input
+                                                    {...field}
+                                                    className="bg-white"
+                                                    onChange={(e) => {
+                                                        field.onChange(e);
+                                                        setFilteredBusinessTypes(
+                                                            BUSINESS_TYPES.filter(t => t.toLowerCase().includes(e.target.value.toLowerCase()))
+                                                        );
+                                                    }}
+                                                    onFocus={() => {
+                                                        if (!field.value) setFilteredBusinessTypes(BUSINESS_TYPES);
+                                                        else setFilteredBusinessTypes(BUSINESS_TYPES.filter(t => t.toLowerCase().includes((field.value || "").toLowerCase())));
+                                                    }}
+                                                    onBlur={() => setTimeout(() => setFilteredBusinessTypes([]), 200)}
+                                                    autoComplete="off"
+                                                />
                                             </FormControl>
+                                            {filteredBusinessTypes.length > 0 && (
+                                                <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                                                    {filteredBusinessTypes.map((type) => (
+                                                        <div
+                                                            key={type}
+                                                            className="px-3 py-2 cursor-pointer hover:bg-slate-100 text-sm"
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault(); // Prevent blur before click
+                                                                field.onChange(type);
+                                                                setFilteredBusinessTypes([]);
+                                                            }}
+                                                        >
+                                                            {type}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -364,8 +526,8 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
                             </div>
                         </div>
 
-                        {/* SECTION 3: DOCUMENTS - Only show for FIXO */}
-                        {watchMerchantType === "FIXO" && (
+                        {/* SECTION 3: DOCUMENTS - Show for FIXO and CIDADAO */}
+                        {["FIXO", "CIDADAO"].includes(watchMerchantType) && (
                             <div className="p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-100">
                                 <h3 className="text-xs font-semibold uppercase text-slate-500 tracking-wider mb-2">Documentação (KYC) <span className="text-red-500">- Obrigatório</span></h3>
                                 <div className="grid grid-cols-3 gap-4">
@@ -422,8 +584,8 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
                             </div>
                         )}
 
-                        {/* SECTION 4: CONTACTS & MOBILE MONEY - Only show for FIXO */}
-                        {watchMerchantType === "FIXO" && (
+                        {/* SECTION 4: CONTACTS & MOBILE MONEY - Show for FIXO and CIDADAO */}
+                        {["FIXO", "CIDADAO"].includes(watchMerchantType) && (
                             <div className="p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-100">
                                 <h3 className="text-xs font-semibold uppercase text-slate-500 tracking-wider mb-2">Contactos & Mobile Money <span className="text-red-500">- Obrigatório</span></h3>
                                 <div className="grid grid-cols-2 gap-4">
@@ -477,8 +639,8 @@ export function EditMerchantDialog({ merchant, onSuccess }: EditMerchantDialogPr
                             </div>
                         )}
 
-                        {/* SECTION 5: TECH - Only show for FIXO */}
-                        {watchMerchantType === "FIXO" && (
+                        {/* SECTION 5: TECH - Show for FIXO and CIDADAO */}
+                        {["FIXO", "CIDADAO"].includes(watchMerchantType) && (
                             <div className="grid grid-cols-1 gap-4">
                                 <FormField
                                     control={form.control}

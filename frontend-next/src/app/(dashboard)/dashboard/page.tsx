@@ -11,12 +11,14 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell
 } from "recharts"
 import { useDocumentTitle } from "@/hooks/useDocumentTitle"
+import { PayTaxDialog } from "@/components/forms/PayTaxDialog"
 
 export default function DashboardPage() {
     useDocumentTitle("dashboard")
@@ -285,14 +287,71 @@ export default function DashboardPage() {
                                 <div className="relative z-10">
                                     <p className="text-emerald-100 font-medium mb-1">Saldo Arrecadado (Hoje)</p>
                                     <h2 className="text-4xl font-bold mb-4">{Number(stats?.revenue_today || 0).toLocaleString('pt-MZ', { minimumFractionDigits: 2 })} MZN</h2>
-                                    <div className="flex gap-3">
+                                    <div className="flex gap-3 items-center">
                                         <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium">
                                             {user?.status || "ATIVO"}
                                         </div>
                                     </div>
                                 </div>
+
+                                <div className="absolute right-8 top-1/2 -translate-y-1/2 z-20 hidden md:block">
+                                    <PayTaxDialog merchantId={user.id!}>
+                                        <Button variant="secondary" size="lg" className="shadow-lg font-bold bg-white text-emerald-700 hover:bg-emerald-50 border-0">
+                                            <Banknote className="mr-2 h-5 w-5" />
+                                            Pagar Taxa Municipal
+                                        </Button>
+                                    </PayTaxDialog>
+                                </div>
+
+                                {/* Mobile Button below */}
+                                <div className="md:hidden mt-6 relative z-20">
+                                    <PayTaxDialog merchantId={user.id!}>
+                                        <Button variant="secondary" className="w-full shadow-lg font-bold bg-white text-emerald-700 hover:bg-emerald-50 border-0">
+                                            <Banknote className="mr-2 h-5 w-5" />
+                                            Pagar Taxa
+                                        </Button>
+                                    </PayTaxDialog>
+                                </div>
+
                                 <Wallet className="absolute right-[-20px] bottom-[-20px] w-64 h-64 text-white/10 rotate-12" />
                             </div>
+
+                            {/* Show recent transactions for merchant too */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Histórico Recente</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Data</TableHead>
+                                                <TableHead>Tipo</TableHead>
+                                                <TableHead>Valor</TableHead>
+                                                <TableHead>Status</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {recentTransactions.map((t) => (
+                                                <TableRow key={t.id}>
+                                                    <TableCell className="text-xs text-muted-foreground">
+                                                        {new Date(t.created_at).toLocaleString()}
+                                                    </TableCell>
+                                                    <TableCell>{t.tax_code ? <Badge variant="outline">{t.tax_code}</Badge> : "Venda"}</TableCell>
+                                                    <TableCell className="font-bold">
+                                                        {Number(t.amount).toLocaleString('pt-MZ', { minimumFractionDigits: 2 })}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={t.status === "SUCESSO" ? "success" : (t.status === "PENDENTE" ? "warning" : "destructive")}>
+                                                            {t.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
                         </div>
                     )}
                 </>

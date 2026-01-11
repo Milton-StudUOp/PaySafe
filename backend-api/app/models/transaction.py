@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Enum, TIMESTAMP, func, ForeignKey, Numeric, JSON
+from sqlalchemy import Column, BigInteger, String, Enum, TIMESTAMP, func, ForeignKey, Numeric, JSON, Integer
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -44,6 +44,10 @@ class Transaction(Base):
     # Location Snapshot (for audit/reports even if entities move)
     province = Column(String(100), nullable=True)
     district = Column(String(100), nullable=True)
+    
+    # Tax Details
+    tax_code = Column(String(50), nullable=True) # References tax_configurations.code
+    tax_year = Column(Integer, nullable=True)
     
     # Offline Sync Audit Fields
     # Stores original client-generated values for offline payments

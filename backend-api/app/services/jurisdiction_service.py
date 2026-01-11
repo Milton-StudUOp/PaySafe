@@ -202,7 +202,7 @@ async def check_merchant_jurisdiction(
             await log_unauthorized_access(user, "MERCHANT", merchant_id, db)
         return None
     
-    # Get jurisdiction from merchant's market
+    # Get jurisdiction from merchant's market OR from merchant directly (Cidadão)
     if merchant.market_id:
         market_result = await db.execute(
             select(MarketModel).where(MarketModel.id == merchant.market_id)
@@ -223,6 +223,19 @@ async def check_merchant_jurisdiction(
                 # FUNCIONARIO and others: standard jurisdiction match
                 if _check_jurisdiction_match(market.province, market.district, user):
                     return merchant
+    elif merchant.province:
+        # Cidadão merchant - use merchant's own province/district
+        if hasattr(user, 'role') and user.role.value == "SUPERVISOR":
+            if user.scope_district:
+                if merchant.district == user.scope_district:
+                    return merchant
+            elif user.scope_province:
+                if merchant.province == user.scope_province:
+                    return merchant
+        else:
+            # FUNCIONARIO and others: standard jurisdiction match
+            if _check_jurisdiction_match(merchant.province, merchant.district, user):
+                return merchant
     
     # Access denied
     if log_attempt:

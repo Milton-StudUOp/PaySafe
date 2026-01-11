@@ -76,6 +76,22 @@ os.makedirs(apk_dir, exist_ok=True)
 # Mount /apk route to serve files
 app.mount("/static/apk", StaticFiles(directory=apk_dir), name="apk")
 
+# Direct APK download endpoint with correct MIME type
+from fastapi.responses import FileResponse
+
+@app.get("/download/apk/{filename}")
+async def download_apk(filename: str):
+    """Download APK with correct MIME type to avoid ZIP conversion"""
+    file_path = os.path.join(apk_dir, filename)
+    if not os.path.exists(file_path):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="APK not found")
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type="application/vnd.android.package-archive"
+    )
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

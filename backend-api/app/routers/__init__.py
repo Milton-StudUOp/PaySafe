@@ -33,4 +33,7 @@ api_router.include_router(payments_router)
 api_router.include_router(merchant_fees_router)
 api_router.include_router(app_updates_router)
 
+from .taxes import router as taxes_router
+api_router.include_router(taxes_router)
+
 
